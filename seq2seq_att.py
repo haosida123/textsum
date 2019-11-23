@@ -4,15 +4,15 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import tensorflow as tf
 from tensorflow_addons.seq2seq import BahdanauAttention as tfaBAttention
 
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
-from sklearn.model_selection import train_test_split
+# import matplotlib.pyplot as plt
+# import matplotlib.ticker as ticker
+# from sklearn.model_selection import train_test_split
 
-import unicodedata
-import re
-import numpy as np
-import os
-import io
+# import unicodedata
+# import re
+# import numpy as np
+# import os
+# import io
 
 
 # encoder input shape

@@ -5,7 +5,7 @@ import pathlib
 
 # 获取项目根目录
 root = pathlib.Path(os.path.abspath(__file__)).parent.parent
-
+data_path = os.path.join(root, 'data')
 # 训练数据路径
 train_data_path = os.path.join(root, 'data', 'AutoMaster_TrainSet.csv')
 # 测试数据路径
@@ -22,6 +22,6 @@ test_seg_path = os.path.join(root, 'data', 'test_seg_data.csv')
 # 自定义切词表
 user_dict = os.path.join(root, 'data', 'user_dict.txt')
 
-
 # Vocab词频文件
-vocab_freq_path = os.path.join(root, 'data', 'vocab_dict.json')
+vocab_train_path = os.path.join(root, 'data', 'vocab_dict.json')
+vocab_train_test_path = os.path.join(root, 'data', 'vocab_train_test.json')

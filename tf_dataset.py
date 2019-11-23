@@ -17,9 +17,11 @@ import time
 path_to_file = "/spa-eng/spa.txt"
 
 # Converts the unicode file to ascii
+
+
 def unicode_to_ascii(s):
     return ''.join(c for c in unicodedata.normalize('NFD', s)
-        if unicodedata.category(c) != 'Mn')
+                   if unicodedata.category(c) != 'Mn')
 
 
 def preprocess_sentence(w):
@@ -48,7 +50,8 @@ def preprocess_sentence(w):
 def create_dataset(path, num_examples):
     lines = io.open(path, encoding='UTF-8').read().strip().split('\n')
 
-    word_pairs = [[preprocess_sentence(w) for w in l.split('\t')]  for l in lines[:num_examples]]
+    word_pairs = [[preprocess_sentence(w) for w in l.split(
+        '\t')] for l in lines[:num_examples]]
 
     return zip(*word_pairs)
 
@@ -56,17 +59,18 @@ def create_dataset(path, num_examples):
 def max_length(tensor):
     return max(len(t) for t in tensor)
 
+
 def tokenize(lang):
-  lang_tokenizer = tf.keras.preprocessing.text.Tokenizer(
-      filters='')
-  lang_tokenizer.fit_on_texts(lang)
+    lang_tokenizer = tf.keras.preprocessing.text.Tokenizer(
+        filters='')
+    lang_tokenizer.fit_on_texts(lang)
 
-  tensor = lang_tokenizer.texts_to_sequences(lang)
+    tensor = lang_tokenizer.texts_to_sequences(lang)
 
-  tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
-                                                         padding='post')
+    tensor = tf.keras.preprocessing.sequence.pad_sequences(tensor,
+                                                           padding='post')
 
-  return tensor, lang_tokenizer
+    return tensor, lang_tokenizer
 
 
 def load_dataset(path, num_examples=None):
@@ -78,11 +82,11 @@ def load_dataset(path, num_examples=None):
 
     return input_tensor, target_tensor, inp_lang_tokenizer, targ_lang_tokenizer
 
-def convert(lang, tensor):
-  for t in tensor:
-    if t!=0:
-      print ("%d ----> %s" % (t, lang.index_word[t]))
 
+def convert(lang, tensor):
+    for t in tensor:
+        if t != 0:
+            print("%d ----> %s" % (t, lang.index_word[t]))
 
 
 def main():
@@ -94,5 +98,9 @@ def main():
     vocab_inp_size = len(inp_lang.word_index)+1
     vocab_tar_size = len(targ_lang.word_index)+1
 
-    dataset = tf.data.Dataset.from_tensor_slices((input_tensor_train, target_tensor_train)).shuffle(BUFFER_SIZE)
+    dataset = tf.data.Dataset.from_tensor_slices(
+        (input_tensor_train, target_tensor_train)).shuffle(BUFFER_SIZE)
     dataset = dataset.batch(BATCH_SIZE, drop_remainder=True)
+
+    example_input_batch, example_target_batch = next(iter(dataset))
+    example_input_batch.shape, example_target_batch.shape
