@@ -1,0 +1,10 @@
+*.ipynb
+data/
+*.txt
+*.csv
+*.zip
+*.model
+*.pyc
+*.sh
+.vscode/
+作业*
