@@ -181,9 +181,9 @@ class Vocab(object):
         return [self.__getitem__(token) for token in tokens]
 
     def to_tokens(self, indices):
-        if not isinstance(indices, (list, tuple)):
-            return self.idx_to_token[indices]
-        return [self.idx_to_token[index] for index in indices]
+        if isinstance(indices, (list, tuple)):
+            return [self.to_tokens(index) for index in indices]
+        return self.idx_to_token[indices]
 
     def to_json(self, path):
         with open(path, 'w') as file:

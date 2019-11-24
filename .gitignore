@@ -8,3 +8,4 @@ data/
 *.sh
 .vscode/
 作业*
+debug.py

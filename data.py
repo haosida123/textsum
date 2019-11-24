@@ -31,15 +31,26 @@ class MyCorpus(object):
 
 
 class TextDataset():
-    def __init__(self, df=None, x_cols=None, y_cols=None, min_freq=2, data_size=None):
-        """dataframe to text list of lines for textsum
-        :param df: pandas.DataFrame
-        :param x_cols: predictor columns, cannot be none if df is not None
-        :param y_cols: prediction column
-        :param datasize: first n lines to test
-        train_lines: list with shape (sentences #, sentence length) and 
-        corresponding vocabulary for translation"""
+    """text dataset generating numpy arrays from dataframe of text
+        Parameters
+        ----------
+        df: pandas.DataFrame
 
+        x_cols: predictor columns, cannot be none if df is not None
+
+        y_cols: prediction column
+
+        datasize: first n lines to test
+
+        Attributes
+        ----------
+        train_lines/text_lines: list with shape (sentences #, sentence length) and 
+        corresponding vocabulary for translation
+
+        vocab: vocabulary which transform between numbers and words
+        """
+    def __init__(self, df=None, x_cols=None, y_cols=None, min_freq=2, data_size=None):
+        """from dataframe to text list of lines for textsum"""
         self.min_freq = min_freq
 
         if df is not None:
@@ -81,7 +92,18 @@ class TextDataset():
 
     def to_tf_train_input(self):
         """transfer x_seq_length, y_seq_lengthto tokenized numpy array,
-        can be used by tf.data.Dataset.from_tensor_slices"""
+        can be used by tf.data.Dataset.from_tensor_slices
+        Returns
+        -------
+        npx: numpy array
+            test input sentences
+        x_sequence_length: numpy array
+            corresponding length of input sentences
+        npy: numpy array
+            test output sentences
+        y_sequence_length: numpy array
+            corresponding length of output sentences
+        """
         x_max_length = self.decide_max_length(
             [len(l) for l in self.train_lines_x])
         y_max_length = self.decide_max_length(
@@ -94,7 +116,14 @@ class TextDataset():
 
     def to_tf_test_input(self, sentences=None):
         """transfer sentences to tokenized numpy array, if no sentences, transfer self.test_lines_x
-        can be used by tf.convert_to_tensor or from_tensor_slices"""
+        can be used by tf.convert_to_tensor or from_tensor_slices
+        Returns
+        -------
+        npx: numpy array
+            test input sentences
+        x_sequence_length: numpy array
+            corresponding length of input sentences
+        """
         if sentences:
             if isinstance(sentences, str):
                 sentences = [sentences]
