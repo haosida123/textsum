@@ -2,6 +2,7 @@
 # Created by LuoJie at 11/16/19
 import os
 import pathlib
+import json
 
 # 获取项目根目录
 root = pathlib.Path(os.path.abspath(__file__)).parent.parent
@@ -26,7 +27,28 @@ user_dict = os.path.join(root, 'data', 'user_dict.txt')
 vocab_train_path = os.path.join(root, 'data', 'vocab_dict.json')
 vocab_train_test_path = os.path.join(root, 'data', 'vocab_train_test.json')
 
-# vocab 建立词典最小词频
-min_frequency = 5
 
-embedding_dim = 256
+class Configure:
+    def __init__(self):
+        pass
+
+    def __getitem__(self, key):
+        return self.__dict__.get(key)
+
+    @staticmethod
+    def from_dict(dic):
+        config = Configure()
+        for k, v in dic.items():
+            setattr(config, k, v)
+        return config
+# config = Configure()
+# config.min_frequency = 5
+# config.embedding_dim = 256
+
+# with open(os.path.join(data_path, 'params.json'), 'w') as f:
+#     json.dump(config.__dict__, f)
+
+
+with open(os.path.join(root, 'params.json')) as f:
+    config = json.load(f)
+params = Configure.from_dict(config)

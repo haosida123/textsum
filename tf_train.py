@@ -1,8 +1,10 @@
+raise NotImplementedError
+'''
 import tensorflow as tf
 import time
 import os
-import logging
-from utils.config import data_path, min_frequency, embedding_dim
+# import logging
+from utils.config import data_path, params
 from preprocessing import Vocab
 import pandas as pd
 import gensim.models
@@ -11,24 +13,9 @@ import numpy as np
 
 # from seq2seq_att import *
 
-def fasttext_embedding(load_file=True):
-    """returns embedding matrix and the vocab"""
-    logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
-    file = os.path.join(data_path, "modelfasttext.model")
-    sentences = MyCorpus()
-    if load_file:
-        try:
-            modelfasttext = gensim.models.fasttext.FastText.load(file)
-        except FileNotFoundError:
-            load_file = False
-    if not load_file:
-        modelfasttext = gensim.models.fasttext.FastText(sentences=sentences,
-                                size=embedding_dim, window=5, min_count=min_frequency, workers=4)
-        modelfasttext.save(file)
-    embedding_matrix = np.array([modelfasttext.wv[token] for token in sentences.vocab.idx_to_token])
-    return embedding_matrix, sentences.vocab
-
 def loss_function(real, pred):
+    loss_object = tf.keras.losses.SparseCategoricalCrossentropy(
+        from_logits=True, reduction='none')
     mask = tf.math.logical_not(tf.math.equal(real, 0))
     loss_ = loss_object(real, pred)
 
@@ -40,6 +27,7 @@ def loss_function(real, pred):
 
 @tf.function
 def train_step(inp, targ, enc_hidden):
+    optimizer = tf.keras.optimizers.Adam()
     loss = 0
 
     with tf.GradientTape() as tape:
@@ -175,3 +163,4 @@ def masked_softmax(X, valid_length):
         X = nd.SequenceMask(X.reshape((-1, shape[-1])), valid_length, True,
                             axis=1, value=-1e6)
         return X.softmax().reshape(shape)
+'''

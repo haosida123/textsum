@@ -1,9 +1,10 @@
+#%%
 import collections
 # import gensim
 import jieba
 import pandas as pd
 import re
-# import matplotlib.pyplot as plt
+import numpy as np
 import json
 from utils.config import train_data_path, test_data_path
 from utils.config import train_seg_path, test_seg_path
@@ -97,7 +98,7 @@ def tokenize(df, sep=True):
         # df[col] = df[col].apply(lambda s: ' '.join(jieba.cut(s)))
         df[col] = df[col].apply(lambda s: ' '.join(tokenize_sentence(s, sep)))
     colx = ['Brand', 'Model', 'Question', 'Dialogue']
-    df['ColX'] = df.apply(lambda x: ' '.join([x[col] for col in colx]), axis=1)
+    df['ColX'] = df.apply(lambda x: ' seperator '.join([x[col] for col in colx]), axis=1)
     df.drop(columns=colx, inplace=True)
 
 
@@ -181,6 +182,8 @@ class Vocab(object):
         return [self.__getitem__(token) for token in tokens]
 
     def to_tokens(self, indices):
+        if isinstance(indices, np.ndarray):
+            indices = indices.tolist()
         if isinstance(indices, (list, tuple)):
             return [self.to_tokens(index) for index in indices]
         return self.idx_to_token[indices]
@@ -199,18 +202,26 @@ class Vocab(object):
 if __name__ == '__main__':
     dfcut, df1cut = gen_cut_csv('r')
     # dfcut, df1cut = gen_cut_csv('write')
-    vocab = Vocab(dfcut, min_freq=0)
-    print('vocab len, vocab total:')
-    total = sum([x[1] for x in vocab.token_freqs])
-    print(len(vocab.token_freqs), total)
+    # vocab = Vocab(dfcut, min_freq=0)
+    # print('vocab len, vocab total:')
+    # total = sum([x[1] for x in vocab.token_freqs])
+    # print(len(vocab.token_freqs), total)
     # plt.loglog(list(range(len(vocab.token_freqs))), [x[1]/total for x in vocab.token_freqs])
     # plt.show()
-    vocab.to_json(vocab_train_path)
-    vocab_from_fson = Vocab.from_json(vocab_train_path)
+    # vocab.to_json(vocab_train_path)
+    # vocab_from_json = Vocab.from_json(vocab_train_path)
 
     df = pd.concat([dfcut, df1cut], axis=0, sort=False
                    ).fillna('')
     vocab = Vocab(df, min_freq=0, use_special_tokens=True)
-    vocab.to_json(vocab_train_test_path)
+    # vocab.to_json(vocab_train_test_path)
+    print('vocab len, vocab total:')
+    total = sum([x[1] for x in vocab.token_freqs])
+    print(len(vocab.token_freqs), total)
+    vocab_from_json = Vocab.from_json(vocab_train_test_path)
+    # print(sorted(list(vocab.token_freqs.keys())) == sorted(list(vocab_from_json.token_freqs.keys())))
 
 #pd.set_option('display.max_rows', None, 'display.max_columns', None, 'display.max_colwidth', 500)
+
+
+# %%
