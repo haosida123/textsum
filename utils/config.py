@@ -25,3 +25,8 @@ user_dict = os.path.join(root, 'data', 'user_dict.txt')
 # Vocab词频文件
 vocab_train_path = os.path.join(root, 'data', 'vocab_dict.json')
 vocab_train_test_path = os.path.join(root, 'data', 'vocab_train_test.json')
+
+# vocab 建立词典最小词频
+min_frequency = 5
+
+embedding_dim = 256

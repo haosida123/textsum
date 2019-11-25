@@ -1,6 +1,6 @@
 # from preprocessing import gen_cut_csv
 from preprocessing import Vocab, gen_cut_csv, replace_sentence, tokenize_sentence
-from utils.config import vocab_train_test_path
+from utils.config import vocab_train_test_path, min_frequency
 
 from functools import reduce
 import numpy as np
@@ -11,14 +11,15 @@ import pandas as pd
 class MyCorpus(object):
     """An interator that yields sentences (lists of str)."""
 
-    def __init__(self, min_freq=5, df=None):
-        self.min_freq = min_freq
-        if not df:
+    def __init__(self, df=None):
+        # self.min_freq = min_frequency
+        if df is None:
             df, _ = gen_cut_csv('r')
             self.vocab = Vocab.from_json(
-                'vocab_dict.json', self.min_freq, use_special_tokens=True)
+                vocab_train_test_path, min_freq=min_frequency, use_special_tokens=True)
         else:
-            self.vocab = Vocab(df, min_freq=min_freq, use_special_tokens=True)
+            self.vocab = Vocab(df, min_freq=min_frequency,
+                               use_special_tokens=True)
         self.df = df
 
     def __iter__(self):
@@ -49,9 +50,10 @@ class TextDataset():
 
         vocab: vocabulary which transform between numbers and words
         """
-    def __init__(self, df=None, x_cols=None, y_cols=None, min_freq=2, data_size=None):
+
+    def __init__(self, df=None, x_cols=None, y_cols=None, data_size=None):
         """from dataframe to text list of lines for textsum"""
-        self.min_freq = min_freq
+        # self.min_freq = min_frequency
 
         if df is not None:
             if not isinstance(x_cols, list):
@@ -59,7 +61,8 @@ class TextDataset():
             if not isinstance(y_cols, list):
                 y_cols = [y_cols]
             df.fillna('', inplace=True)
-            self.vocab = Vocab(df, min_freq=min_freq, use_special_tokens=True)
+            self.vocab = Vocab(df, min_freq=min_frequency,
+                               use_special_tokens=True)
             self.train_lines_x = self._df2lines(df[x_cols])
             self.train_lines_y = self._df2lines(df[y_cols])
             self.test_lines_x = None
@@ -70,11 +73,11 @@ class TextDataset():
                 df_test = df_test.iloc[:data_size]
                 df = pd.concat([df_train, df_test], axis=0,
                                sort=False).fillna('')
-                self.vocab = Vocab(df, min_freq=min_freq,
+                self.vocab = Vocab(df, min_freq=min_frequency,
                                    use_special_tokens=True)
             else:
                 self.vocab = Vocab.from_json(
-                    vocab_train_test_path, min_freq=min_freq, use_special_tokens=True)
+                    vocab_train_test_path, min_freq=min_frequency, use_special_tokens=True)
             self.train_lines_x = self._df2lines(df_train.loc[:, ['ColX']])
             self.train_lines_y = self._df2lines(df_train.loc[:, ['Report']])
             self.test_lines_x = self._df2lines(df_test.loc[:, ['ColX']])
@@ -163,9 +166,19 @@ class TextDataset():
         ret = np.percentile(lengths, 99)
         print('line min, max, and 99-percentile:\n',
               lengths[0], lengths[-1], ret)
-        ret = int(min(np.percentile(lengths, 10) + np.percentile(lengths, 99),lengths[-1]))
+        ret = int(min(np.percentile(lengths, 10) +
+                      np.percentile(lengths, 99), lengths[-1]))
+        # ret = lengths[-1]
         print('selecting:', ret)
         return ret
+
+    # TODO: bucket_by_sequence_length
+    # tf.data.experimental.bucket_by_sequence_length
+    # https://www.tensorflow.org/api_docs/python/tf/data/experimental/bucket_by_sequence_length
+    # https://stackoverflow.com/questions/50606178/tensorflow-tf-data-dataset-and-bucketing
+    def element_length(self, array):
+        """return length of array without padding"""
+        return sum(array != self.vocab.pad)
 
 # datatest = TextDataset()
 # tfdx, tfdy, lx, ly = datatest.to_tf_train_input()

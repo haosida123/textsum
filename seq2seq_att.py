@@ -25,11 +25,17 @@ class Encoder(tf.keras.Model):
         encoder input shape (batch_size, max_sequence_length)
         encoder output shape (batch_size, max_length, hidden_size)
         encoder hidden state shape (batch_size, hidden_size)'''
-    def __init__(self, vocab_size, embedding_dim, enc_units, batch_sz):
+    def __init__(self, vocab_size, embedding_dim, enc_units, batch_sz, embedding_matrix=None):
         super(Encoder, self).__init__()
         self.batch_sz = batch_sz
         self.enc_units = enc_units
-        self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_dim)
+        if embedding_matrix is not None:
+            self.embedding = tf.keras.layers.Embedding(
+                vocab_size, embedding_dim,
+                embeddings_initializer=tf.keras.initializers.Constant(embedding_matrix),
+                trainable=False)
+        else:
+            self.embedding = tf.keras.layers.Embedding(vocab_size, embedding_dim)
         self.gru = tf.keras.layers.GRU(self.enc_units,
                                     return_sequences=True,
                                     return_state=True,
@@ -124,9 +130,7 @@ class BahdanauAttention(tf.keras.layers.Layer):
         return context_vector, attention_weights
 
 #%%
-# BATCH_SIZE = 64
-# embedding_dim = 256
-# enc_units = 1024
-# encoder = Encoder(10000, embedding_dim, enc_units, BATCH_SIZE)
+
+class Seq2seq_Attention_model()
 
 # %%
