@@ -79,7 +79,7 @@ class Seq2seq_attention():
                 batch_loss = self.train_step(
                     inp, targ, enc_hidden, vocab_beginning_token_index)
                 total_loss += batch_loss
-                if batch % (steps_per_epoch // 10 + 1) == 0:
+                if batch % (steps_per_epoch // 50 + 1) == 0:
                     print('Epoch {} Batch {} Loss {:.4f}'.format(
                         epoch + 1, batch, batch_loss.numpy()))
             # saving (checkpoint) the model every 2 epochs
