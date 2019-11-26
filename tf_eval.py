@@ -1,9 +1,9 @@
-from preprocessing import replace_sentence, tokenize_sentence
+# from preprocessing import replace_sentence, tokenize_sentence
 # from utils.config import params
 # from seq2seq_att import Encoder, Decoder
 import tensorflow as tf
 
-from data import TextDataset
+# from data import TextDataset
 
 
 def evaluate(inputs, vocab, max_length_targ, encoder, decoder):
@@ -35,28 +35,14 @@ def evaluate(inputs, vocab, max_length_targ, encoder, decoder):
     return result
 
 
-def predict(sentence, vocab, max_length_inp, max_length_targ, encoder, decoder):
-    sentence = tokenize_sentence(replace_sentence(sentence))
-    inputs = [vocab[w] for w in sentence]
-    # inputs = tf.keras.preprocessing.sequence.pad_sequences(
-    #     [inputs], maxlen=max_length_inp, padding='post')
-    inputs = TextDataset.build_array(
-        [inputs], vocab, max_length_inp, is_source=True)[0]
-    result = evaluate(
-        inputs, vocab, max_length_targ, encoder, decoder)
-
-    print('Input: %s' % (sentence))
-    print('Predicted translation: {}'.format(result))
-
-
 def predict_array_input(inputs, vocab, max_length_targ, encoder, decoder, targets=None):
     # inputs = TextDataset.build_array([inputs], vocab, max_length_inp, is_source=True)[0]
     result = evaluate(
         [inputs], vocab, max_length_targ, encoder, decoder)
 
-    print('Input: %s' % (vocab.to_tokens(inputs)))
-    print('Predicted translation: {}'.format(result))
+    print('Input:\t%s' % ' '.join([vocab.to_tokens(w) for w in inputs if w not in [vocab.bos, vocab.eos, vocab.pad]]))
+    print('Predicted:\t{}'.format(result))
     if targets is not None:
-        print('Target translation: {}'.format(
+        print('Target:\t{}'.format(
             ''.join([vocab.to_tokens(t) for t in targets if t not in [vocab.bos, vocab.eos, vocab.pad]]
                     ).replace('seperator', ',')))

@@ -3,7 +3,7 @@ from sklearn.model_selection import train_test_split
 
 import tensorflow as tf
 
-from data import TextDataset
+from data import TextDataset, MyCorpus
 
 from utils.config import params
 from tf_seq2seq_att import fasttext_embedding, Seq2seq_attention
@@ -38,7 +38,7 @@ example_input_batch.shape, example_target_batch.shape
 
 #%%
 seq2seq = Seq2seq_attention(vocab_size, params)
-# seq2seq = Seq2seq_attention(vocab_size, params, embedding_matrix=fasttext_embedding(params))
+# seq2seq = Seq2seq_attention(vocab_size, params, embedding_matrix=fasttext_embedding(params, sentences=None)))
 seq2seq.compare_input_output(example_input_batch[0], datatext, max(seq_length_y), example_target_batch[0])
 # predict_array_input(example_input_batch[0].numpy().tolist(), datatext.vocab, max(seq_length_y), encoder, decoder)
 #%%

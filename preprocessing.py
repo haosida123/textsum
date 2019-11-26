@@ -8,7 +8,7 @@ import numpy as np
 import json
 from utils.config import train_data_path, test_data_path
 from utils.config import train_seg_path, test_seg_path
-from utils.config import user_dict, vocab_train_path, vocab_train_test_path
+from utils.config import user_dict, vocab_train_test_path  # , vocab_train_path
 
 URLPATTERN = re.compile(
     "(http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9\@\:\%\_\+\~\#\=]{1,256}\.[-a-z]{1,6}[\.\\\/]{1,2}[-\w]{1,6}([-a-zA-Z0-9@:%_\+.~#?&//\=]*)")

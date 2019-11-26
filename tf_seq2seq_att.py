@@ -10,17 +10,17 @@ import numpy as np
 from functools import reduce
 
 from tf_eval import predict_array_input
-from data import MyCorpus
-from utils.config import data_path
+# from data import MyCorpus
+# from utils.config import data_path
 
 
 class Seq2seq_attention():
     def __init__(self, vocab_size, params, embedding_matrix=None):
-        self.params = params
+        params = self.params = params.from_json()  # update if json file changed
         encoder = Encoder(vocab_size, params["embedding_dim"],
                           params["enc_units"], params["batch_size"], embedding_matrix)
         decoder = Decoder(
-            vocab_size, params["embedding_dim"], params["dec_units"], params["batch_size"])
+            vocab_size, params["embedding_dim"], params["dec_units"], params["batch_size"], params["att_units"])
         self.encoder = encoder
         self.decoder = decoder
 
@@ -63,7 +63,7 @@ class Seq2seq_attention():
             from_logits=True, reduction='none') if loss_object is None else loss_object
         self.checkpoint = tf.train.Checkpoint(
             optimizer=self.optimizer, encoder=self.encoder, decoder=self.decoder)
-        self.checkpoint_dir = os.path.join(data_path, 'training_checkpoints')
+        self.checkpoint_dir = os.path.join(self.params.data_path, 'training_checkpoints')
         checkpoint_prefix = os.path.join(self.checkpoint_dir, "ckpt")
         if restore_checkpoint:
             print('restoring checkpoint')
@@ -118,50 +118,6 @@ class Seq2seq_attention():
             self.encoder, self.decoder, targets)
 
 
-def fasttext_embedding(params, load_file=True):
-    """returns embedding matrix"""
-    file = os.path.join(data_path, "fasttext_embedding.npy")
-    # file = os.path.join(data_path, "modelfasttext.model")
-    if load_file:
-        try:
-            # modelfasttext = gensim.models.fasttext.FastText.load(file)
-            return np.load(file, allow_pickle=False)
-        except FileNotFoundError:
-            load_file = False
-    if not load_file:
-        logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
-        sentences = MyCorpus()
-        modelfasttext = gensim.models.fasttext.FastText(sentences=sentences,
-                                                        size=params.embedding_dim, window=5, min_count=params.vocab_min_frequency, workers=4)
-        # modelfasttext.save(file)
-        embedding_matrix = np.array(
-            [modelfasttext.wv[token] for token in sentences.vocab.idx_to_token])
-        np.save(file, embedding_matrix, allow_pickle=False)
-    return embedding_matrix  # , sentences.vocab
-
-
-# def load_encoder_decoder(vocab_size, params, checkpoint_dir=None, optimizer=None, embedding_matrix=None):
-#     """
-# Returns
-# -------
-# encoder
-
-# decoder
-# """
-#     encoder = Encoder(vocab_size, params["embedding_dim"], params["enc_units"], params["batch_size"], embedding_matrix)
-#     decoder = Decoder(vocab_size, params["embedding_dim"], params["dec_units"], params["batch_size"])
-#     if checkpoint_dir:
-#         try:
-#             if optimizer:
-#                 checkpoint = tf.train.Checkpoint(optimizer=optimizer, encoder=encoder, decoder=decoder)
-#             else:
-#                 checkpoint = tf.train.Checkpoint(encoder=encoder, decoder=decoder)
-#             checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
-#         except Exception as e:
-#             print('error', e)
-#     return encoder, decoder
-
-
 class Encoder(tf.keras.Model):
     ''' Encoder(vocab_size, embedding_dim, enc_units, batch_sz)
         encoder input shape (batch_size, max_sequence_length)
@@ -196,7 +152,7 @@ class Encoder(tf.keras.Model):
 
 
 class Decoder(tf.keras.Model):
-    def __init__(self, vocab_size, embedding_dim, dec_units, batch_sz, attention='BahdanauAttention'):
+    def __init__(self, vocab_size, embedding_dim, dec_units, batch_sz, attention_units, attention='BahdanauAttention'):
         super(Decoder, self).__init__()
         self.batch_sz = batch_sz
         self.dec_units = dec_units
@@ -209,9 +165,9 @@ class Decoder(tf.keras.Model):
 
         # used for attention
         if attention == 'BahdanauAttention':
-            self.attention = BahdanauAttention(self.dec_units)
+            self.attention = BahdanauAttention(attention_units)  # self.dec_units)
         elif attention == 'tfaBAttention':
-            self.attention = tfaBAttention(self.dec_units)
+            self.attention = tfaBAttention(attention_units)  # self.dec_units)
         else:
             raise NotImplementedError
 
@@ -275,3 +231,57 @@ class BahdanauAttention(tf.keras.layers.Layer):
         context_vector = tf.reduce_sum(context_vector, axis=1)
 
         return context_vector, attention_weights
+
+
+def fasttext_embedding(params, load_file=True, sentences=None):
+    """sentences: Corpus object. returns embedding matrix"""
+    file = os.path.join(params.data_path, "fasttext_embedding.npy")
+    # file = os.path.join(data_path, "modelfasttext.model")
+    if load_file:
+        try:
+            # modelfasttext = gensim.models.fasttext.FastText.load(file)
+            return np.load(file, allow_pickle=False)
+        except FileNotFoundError:
+            load_file = False
+    if not load_file:
+        if sentences is None:
+            raise (RuntimeError, 'arg sentences should be a generator of sentences')
+        logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+        # sentences = MyCorpus()
+        modelfasttext = gensim.models.fasttext.FastText(sentences=sentences,
+                                                        size=params.embedding_dim, window=5, min_count=params.vocab_min_frequency, workers=3)
+        # modelfasttext.save(file)
+        embedding_matrix = np.array(
+            [modelfasttext.wv[token] for token in sentences.vocab.idx_to_token])
+        np.save(file, embedding_matrix, allow_pickle=False)
+    return embedding_matrix  # , sentences.vocab
+
+
+def layer_info(layer):
+    name_shapes = [(v.name, v.shape, reduce(lambda x, y: x * y, v.shape)) for v in layer.trainable_variables]
+    print(
+        '\n'.join(['; '.join(
+            [nss[0], str(nss[1]), '{:,}'.format(
+                reduce(lambda x, y: x * y, nss[1]))]) for nss in name_shapes]))
+    print('total trainable weights: {:,}'.format(sum([ns[2] for ns in name_shapes])))
+    return
+# def load_encoder_decoder(vocab_size, params, checkpoint_dir=None, optimizer=None, embedding_matrix=None):
+#     """
+# Returns
+# -------
+# encoder
+
+# decoder
+# """
+#     encoder = Encoder(vocab_size, params["embedding_dim"], params["enc_units"], params["batch_size"], embedding_matrix)
+#     decoder = Decoder(vocab_size, params["embedding_dim"], params["dec_units"], params["batch_size"])
+#     if checkpoint_dir:
+#         try:
+#             if optimizer:
+#                 checkpoint = tf.train.Checkpoint(optimizer=optimizer, encoder=encoder, decoder=decoder)
+#             else:
+#                 checkpoint = tf.train.Checkpoint(encoder=encoder, decoder=decoder)
+#             checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
+#         except Exception as e:
+#             print('error', e)
+#     return encoder, decoder

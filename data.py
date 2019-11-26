@@ -182,6 +182,18 @@ class TextDataset():
         """return length of array without padding"""
         return sum(array != self.vocab.pad)
 
+
+def process_sentence_to_feed(sentence, vocab, max_length_inp):
+    sentence = tokenize_sentence(replace_sentence(sentence))
+    inputs = [vocab[w] for w in sentence]
+    # inputs = tf.keras.preprocessing.sequence.pad_sequences(
+    #     [inputs], maxlen=max_length_inp, padding='post')
+    inputs = TextDataset.build_array(
+        [inputs], vocab, max_length_inp, is_source=True)[0]
+    # result = evaluate(
+    #     inputs, vocab, max_length_targ, encoder, decoder)
+    return inputs
+
 # datatest = TextDataset()
 # tfdx, tfdy, lx, ly = datatest.to_tf_train_input()
 # tftest, tftestl = datatest.to_tf_test_input()

@@ -30,10 +30,17 @@ vocab_train_test_path = os.path.join(root, 'data', 'vocab_train_test.json')
 
 class Configure:
     def __init__(self):
-        pass
+        self.root = root
+        self.data_path = data_path
 
     def __getitem__(self, key):
         return self.__dict__.get(key)
+    
+    @staticmethod
+    def from_json(path='params.json'):
+        with open(os.path.join(root, path)) as f:
+            config = json.load(f)
+        return Configure.from_dict(config)
 
     @staticmethod
     def from_dict(dic):
@@ -49,6 +56,7 @@ class Configure:
 #     json.dump(config.__dict__, f)
 
 
-with open(os.path.join(root, 'params.json')) as f:
-    config = json.load(f)
-params = Configure.from_dict(config)
+# with open(os.path.join(root, 'params.json')) as f:
+#     config = json.load(f)
+# params = Configure.from_dict(config)
+params = Configure.from_json()
