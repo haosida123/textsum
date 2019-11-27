@@ -1,10 +1,12 @@
 # from preprocessing import gen_cut_csv
 from preprocessing import Vocab, gen_cut_csv, replace_sentence, tokenize_sentence
-from utils.config import vocab_train_test_path, params
+from utils.config import vocab_train_test_path, params, data_path
 
 from functools import reduce
 import numpy as np
 import pandas as pd
+import json
+import os
 # import tensorflow as tf
 
 
@@ -78,9 +80,18 @@ class TextDataset():
             else:
                 self.vocab = Vocab.from_json(
                     vocab_train_test_path, min_freq=params.vocab_min_frequency, use_special_tokens=True)
-            self.train_lines_x = self._df2lines(df_train.loc[:, ['ColX']])
-            self.train_lines_y = self._df2lines(df_train.loc[:, ['Report']])
-            self.test_lines_x = self._df2lines(df_test.loc[:, ['ColX']])
+            try:
+                with open(os.path.join(data_path, 'textdatasetxy.json')) as fp:
+                    self.train_lines_x, self.train_lines_y, self.test_lines_x = \
+                        json.load(fp)
+            except Exception as e:
+                print('expected', e, '\ncontinuing')
+                self.train_lines_x = self._df2lines(df_train.loc[:, ['ColX']])
+                self.train_lines_y = self._df2lines(df_train.loc[:, ['Report']])
+                self.test_lines_x = self._df2lines(df_test.loc[:, ['ColX']])
+                with open(os.path.join(data_path, 'textdatasetxy.json'), 'w') as fp:
+                    json.dump((self.train_lines_x, self.train_lines_y, self.test_lines_x), fp)
+
 
     def _df2lines(self, df):
         print('tokenizing lines')
