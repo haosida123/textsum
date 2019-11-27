@@ -25,15 +25,17 @@ def evaluate(inputs, begin_id, end_id, max_length_targ, encoder, decoder):
     return result
 
 
-def predict_array_input(inputs, vocab, max_length_targ, encoder, decoder, targets=None):
+def predict_array_input(inputs, vocab, max_length_targ, encoder, decoder, targets=None, beam_search=None):
     # inputs = TextDataset.build_array([inputs], vocab, max_length_inp, is_source=True)[0]
-    result = evaluate(
-        [inputs], vocab.bos, vocab.eos, max_length_targ, encoder, decoder)
 
     print('Input:\t%s' % ''.join([vocab.to_tokens(w) for w in inputs if w not in [vocab.bos, vocab.eos, vocab.pad]]).replace('seperator', ','))
+    result = evaluate(
+        [inputs], vocab.bos, vocab.eos, max_length_targ, encoder, decoder)
     print('Predicted:\t{}'.format(
-        ''.join([vocab.to_tokens(t) for t in result if t not in [vocab.bos, vocab.eos, vocab.pad]]).replace('seperator', ',')))
+        ''.join([vocab.to_tokens(t) for t in result if t not in [vocab.bos, vocab.eos, vocab.pad, vocab.unk]]).replace('seperator', ',')))
     if targets is not None:
         print('Target:\t{}'.format(
             ''.join([vocab.to_tokens(t) for t in targets if t not in [vocab.bos, vocab.eos, vocab.pad]]
                     ).replace('seperator', ',')))
+    if beam_search is not None:
+        beam_search.print_beam_search(inputs, vocab, targets)

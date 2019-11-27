@@ -82,7 +82,7 @@ class BeamSearch(object):
         self._max_steps = max_steps
         self.normalize_by_length = normalize_by_length
 
-    def BeamSearch(self, enc_inputs):
+    def beam_search(self, enc_inputs):
         """Performs beam search for decoding.
 
         Args:
@@ -98,32 +98,39 @@ class BeamSearch(object):
         enc_top_states, dec_in_state = self._model.encoder(
             tf.expand_dims(enc_inputs, 0), enc_hidden)
         # Replicate the initial states K times for the first step.
+        enc_top_states = tf.tile(enc_top_states, [self._beam_size, 1, 1])
         hyps = [Hypothesis([self._start_token], 0.0, dec_in_state)
                 ] * self._beam_size
         results = []
         steps = 0
         while steps < self._max_steps and len(results) < self._beam_size:
             latest_tokens = tf.expand_dims([h.latest_token for h in hyps], 1)
-            states = [h.state for h in hyps]
+            states = tf.concat([h.state for h in hyps], axis=0)
+            # states = tf.convert_to_tensor([h.state for h in hyps])
             # outputs: (batch_size, vocab_size)
             # new_states: (batch, dec units)
+            # print([t.shape for t in [latest_tokens, states, enc_top_states]])
             outputs, new_states, _ = self._model.decoder(
                 latest_tokens, states, enc_top_states)
-            id_prob_state = sorted(
-                [(idx, np.log(lo), state) for (idx, lo, state) in
-                 zip([range(len(outputs)), outputs, new_states])
-                 ], key=lambda x: x[1], reverse=True
-            )[-self._beam_size:]
-            topk_ids, topk_log_probs, new_states = [[
-                ips[i] for ips in id_prob_state] for i in range(3)]
+            topk_ids = np.argsort(
+                outputs, axis=1)[:, ::-1][:, :self._beam_size * 2]
+            topk_log_probs = np.log(np.sort(
+                outputs, axis=1)[:, ::-1][:, :self._beam_size * 2])
+            # # id_prob_state = sorted(
+            # #     [(idx, np.log(lo), state) for (idx, lo, state) in
+            # #      zip([range(len(outputs)), outputs, new_states])
+            # #      ], key=lambda x: x[1], reverse=True
+            # # )[-self._beam_size:]
+            # # topk_ids, topk_log_probs, new_states = [[
+            # #     ips[i] for ips in id_prob_state] for i in range(3)]
             # Extend each hypothesis.
             all_hyps = []
             # The first step takes the best K results from first hyps. Following
             # steps take the best K results from K*K hyps.
             num_beam_source = 1 if steps == 0 else len(hyps)
             for i in range(num_beam_source):
-                h, ns = hyps[i], new_states[i]
-                for j in range(self._beam_size*2):
+                h, ns = hyps[i], tf.expand_dims(new_states[i], 0)
+                for j in range(self._beam_size * 2):
                     all_hyps.append(
                         h.Extend(topk_ids[i, j], topk_log_probs[i, j], ns))
                     # h.Extend(token, log_prob, new_state)
@@ -160,3 +167,19 @@ class BeamSearch(object):
             return sorted(hyps, key=lambda h: h.log_prob/len(h.tokens), reverse=True)
         else:
             return sorted(hyps, key=lambda h: h.log_prob, reverse=True)
+
+    def print_beam_search(self, enc_inputs, vocab, targets=None):
+        hyps = self.beam_search(enc_inputs)
+        print('Beam search inputs:\t' + ''.join(
+            [vocab.to_tokens(w) for w in enc_inputs if w not in [
+                vocab.bos, vocab.eos, vocab.pad]
+             ]).replace('seperator', ','))
+        if targets is not None:
+            print('Target:\t{}'.format(
+                ''.join([vocab.to_tokens(t) for t in targets if t not in [vocab.bos, vocab.eos, vocab.pad]]
+                        ).replace('seperator', ',')))
+        print('Predicted:')
+        for hyp in hyps[:5]:
+            print('\t\tprob:{:.4e}'.format(np.exp(hyp.log_prob)))
+            print('\t\t{}'.format(
+                ''.join([vocab.to_tokens(t) for t in hyp.tokens if t not in [vocab.bos, vocab.eos, vocab.pad, vocab.unk]]).replace('seperator', ',')))

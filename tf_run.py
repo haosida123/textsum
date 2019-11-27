@@ -1,10 +1,11 @@
 # %%
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
-from data import TextDataset, MyCorpus
+from data import TextDataset  #, MyCorpus
 from utils.config import params
 from tf_seq2seq_att import fasttext_embedding, Seq2seq_attention
-from rouge_l_tensorflow import tf_rouge_l
+from beam_search import BeamSearch
+# from rouge_l_tensorflow import tf_rouge_l
 
 print(params.__dict__)
 datatext = TextDataset()
@@ -14,6 +15,7 @@ vocab_size = len(datatext.vocab)
 # tftest, tftestl = datatext.to_tf_test_input()
 # it = iter(tfdx)
 # print(' '.join(datatext.vocab.to_tokens(next(it).tolist())))
+#%%
 input_tensor_train, input_tensor_val, target_tensor_train, target_tensor_val = train_test_split(
     tfdx, tfdy, test_size=0.1)
 print(len(input_tensor_train), len(target_tensor_train),
@@ -35,22 +37,22 @@ seq2seq.decoder.embedding.trainable = False
 seq2seq.decoder.fc1.trainable = False
 it = iter(dataset.unbatch())
 inp, out = next(it)
-# seq2seq.compare_input_output(inp, datatext.voacb, max(seq_length_y), out)
-
+beam_search = BeamSearch(seq2seq, 9, datatext.vocab.bos, datatext.vocab.eos, max(seq_length_y))
+seq2seq.compare_input_output(inp, datatext.vocab, max(seq_length_y), out, beam_search)
 seq2seq.weight_info()
+
 # %%
 
 
 # def my_loss(truth, preds):
 #     return sum(tf_rouge_l(preds, truth, datatext.vocab.eos))
 # seq2seq.train_epoch(dataset, 5, steps_per_epoch,datatext.vocab.bos, loss_function=my_loss, restore_checkpoint=True, datatest=(input_tensor_val[:1], target_tensor_val[:1]))
-
 def callback():
-    seq2seq.compare_input_output(inp, datatext.vocab, max(seq_length_y), out)
+    seq2seq.compare_input_output(inp, datatext.vocab, max(seq_length_y), out, beam_search)
 
 seq2seq.train_epoch(dataset, 5, steps_per_epoch, datatext.vocab.bos,
                     restore_checkpoint=True, datatest=(input_tensor_val[:100], target_tensor_val[:100]), callback=callback)
-seq2seq.compare_input_output(inp, datatext.vocab, max(seq_length_y), out)
+seq2seq.compare_input_output(inp, datatext.vocab, max(seq_length_y), out, beam_search)
 
 
 # %%

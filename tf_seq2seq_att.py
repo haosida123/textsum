@@ -93,7 +93,7 @@ class Seq2seq_attention():
                 batch_loss = self.train_step(
                     inp, targ, enc_hidden, begin_id)
                 total_loss += batch_loss
-                if batch % (steps_per_epoch // 50 + 1) == 0:
+                if batch % (steps_per_epoch // 100 + 1) == 0:
                     print('Epoch {} Batch {} Loss {:.4f} Time {}'.format(
                         epoch + 1, batch, batch_loss.numpy(), time.time() - start))
             # saving (checkpoint) the model every 2 epochs
@@ -104,6 +104,8 @@ class Seq2seq_attention():
             print('Time taken for 1 epoch {} sec\n'.format(time.time() - start))
 
     def weight_info(self):
+        print('encoder:\n', '  \t'.join([layer.name + ':trainable: {}'.format(layer.trainable) for layer in self.encoder.layers]))
+        print('decoder:\n', '  \t'.join([layer.name + ':trainable: {}'.format(layer.trainable) for layer in self.decoder.layers]))
         name_shapes = [(v.name, v.shape, reduce(lambda x, y: x * y, v.shape)) for v in (
             self.encoder.trainable_variables + self.decoder.trainable_variables)]
         print(
@@ -125,16 +127,16 @@ class Seq2seq_attention():
         self.checkpoint.restore(
             tf.train.latest_checkpoint(self.checkpoint_dir))
 
-    def compare_input_output(self, input_array, vocab, max_tar_length, targets=None):
+    def compare_input_output(self, input_array, vocab, max_tar_length, targets=None, beam_search=None):
         """input_array: array representing single sentence"""
         predict_array_input(
             input_array.numpy().tolist(), vocab, max_tar_length,
-            self.encoder, self.decoder, targets)
+            self.encoder, self.decoder, targets, beam_search)
 
     def teacher_forcing_test_loss(self, test_x, test_y, begin_id):
         """same as train loss calculating method"""
         loss = 0
-        enc_hidden = tf.zeros((test_x.shape[0], self.encoder.enc_dec_units))
+        enc_hidden = tf.zeros((test_x.shape[0], self.encoder.enc_units))
         enc_output, enc_hidden = self.encoder(test_x, enc_hidden)
         dec_hidden = enc_hidden
         dec_input = tf.expand_dims(
@@ -155,15 +157,15 @@ class Seq2seq_attention():
 
 
 class Encoder(tf.keras.Model):
-    ''' Encoder(vocab_size, embedding_dim, enc_dec_units, batch_sz)
+    ''' Encoder(vocab_size, embedding_dim, enc_units, batch_sz)
         encoder input shape (batch_size, max_sequence_length)
         encoder output shape (batch_size, max_length, hidden_size)
         encoder hidden state shape (batch_size, hidden_size)'''
 
-    def __init__(self, vocab_size, embedding_dim, enc_dec_units, batch_sz, embedding_matrix=None):
+    def __init__(self, vocab_size, embedding_dim, enc_units, batch_sz, embedding_matrix=None):
         super(Encoder, self).__init__()
         self.batch_sz = batch_sz
-        self.enc_dec_units = enc_dec_units
+        self.enc_units = enc_units
         if embedding_matrix is not None:
             self.embedding = tf.keras.layers.Embedding(
                 vocab_size, embedding_dim,
@@ -173,7 +175,7 @@ class Encoder(tf.keras.Model):
         else:
             self.embedding = tf.keras.layers.Embedding(
                 vocab_size, embedding_dim)
-        self.gru = tf.keras.layers.GRU(self.enc_dec_units,
+        self.gru = tf.keras.layers.GRU(self.enc_units,
                                        return_sequences=True,
                                        return_state=True,
                                        recurrent_initializer='glorot_uniform')
@@ -184,16 +186,17 @@ class Encoder(tf.keras.Model):
         return output, state
 
     def initialize_hidden_state(self, batch_size):
-        return tf.zeros((batch_size, self.enc_dec_units))
+        return tf.zeros((batch_size, self.enc_units))
 
 
 class Decoder(tf.keras.Model):
-    """(self, vocab_size, embedding_dim, enc_dec_units, batch_sz, attention_units, attention='BahdanauAttention', embedding_matrix=None)"""
-    def __init__(self, vocab_size, embedding_dim, enc_dec_units, batch_sz, attention_units, attention='BahdanauAttention', embedding_matrix=None,
+    """(self, vocab_size, embedding_dim, dec_units, batch_sz, attention_units, attention='BahdanauAttention', embedding_matrix=None)"""
+    def __init__(self, vocab_size, embedding_dim, dec_units, batch_sz, attention_units, attention='BahdanauAttention', embedding_matrix=None,
     activation='softmax'):
         super(Decoder, self).__init__()
         self.batch_sz = batch_sz
-        self.enc_dec_units = enc_dec_units
+        self.dec_units = dec_units
+        print('activation:', activation)
         if embedding_matrix is not None:
             self.embedding = tf.keras.layers.Embedding(
                 vocab_size, embedding_dim,
@@ -201,20 +204,21 @@ class Decoder(tf.keras.Model):
                     embedding_matrix),
                 trainable=False)
             self.fc1 = tf.keras.layers.Dense(vocab_size, use_bias=False, kernel_initializer=tf.keras.initializers.Constant(embedding_matrix.transpose()), activation=activation, trainable=False)
+            print('using pretrained embedding matrix')
         else:
             self.embedding = tf.keras.layers.Embedding(
                 vocab_size, embedding_dim)
             self.fc1 = tf.keras.layers.Dense(vocab_size, use_bias=False, activation=activation)
-        self.gru = tf.keras.layers.GRU(self.enc_dec_units,
+        self.gru = tf.keras.layers.GRU(self.dec_units,
                                        return_sequences=True,
                                        return_state=True,
                                        recurrent_initializer='glorot_uniform')
         self.fc0 = tf.keras.layers.Dense(embedding_dim)
         # used for attention
         if attention == 'BahdanauAttention':
-            self.attention = BahdanauAttention(attention_units)  # self.enc_dec_units)
+            self.attention = BahdanauAttention(attention_units)  # self.dec_units)
         elif attention == 'tfaBAttention':
-            self.attention = tfaBAttention(attention_units)  # self.enc_dec_units)
+            self.attention = tfaBAttention(attention_units)  # self.dec_units)
         else:
             raise NotImplementedError
 
