@@ -62,7 +62,7 @@ def train(dataset, dataval, seq_length_x, seq_length_y, steps_per_epoch, vocab):
     # seq2seq.train_epoch(dataset, 5, steps_per_epoch, vocab.bos,
     #                     restore_checkpoint=True, dataval=dataval, callback=callback)
     callback()
-tf.config.experimental_run_functions_eagerly(True)
+# tf.config.experimental_run_functions_eagerly(True)
 train(dataset, dataval, seq_length_x, seq_length_y, steps_per_epoch, vocab)
 
 

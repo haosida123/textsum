@@ -38,8 +38,8 @@ class Seq2seq_attention(tf.keras.Model):
         with tf.GradientTape() as tape:
             enc_output, enc_hidden = self.encoder(inp, enc_hidden)
             dec_hidden = enc_hidden
-            dec_input = tf.expand_dims(
-                [begin_id] * batch_size, 1)
+            dec_input = tf.cast(tf.expand_dims(
+                [begin_id] * batch_size, 1), tf.int32)
             attention_coverage = tf.cast([0] * enc_output.shape[1], tf.float32)
             attention_coverage = tf.zeros((batch_size, enc_output.shape[1]),
                                           dtype=tf.float32)
@@ -56,7 +56,7 @@ class Seq2seq_attention(tf.keras.Model):
                     attention_coverage, att_weights], axis=0), axis=0))
                 loss += attention_coverage_loss * self.coverage_weight
                 # using teacher forcing
-                dec_input = tf.expand_dims(targ[:, t], 1)
+                dec_input = tf.cast(tf.expand_dims(targ[:, t], 1), tf.int32)
         batch_loss = (loss / int(targ.shape[1]))
         variables = self.encoder.trainable_variables + self.decoder.trainable_variables
         gradients = tape.gradient(loss, variables)

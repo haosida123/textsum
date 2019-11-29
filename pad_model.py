@@ -31,6 +31,22 @@ batch_size = 64
 is_sparse = True
 model_save_dir = "machine_translation.inference.model"
 
+def bigru_layer(embedding):
+    fc_forward = fluid.layers.fc(input=embedding, size=hidden_dim * 3, bias_attr=False)
+    forward = fluid.layers.dynamic_gru(input=fc_forward,
+                                       size=hidden_dim,
+                                       param_attr=fluid.ParamAttr(name='gru_forward_encoder'))
+
+    fc_backward = fluid.layers.fc(input=embedding, size=hidden_dim * 3, bias_attr=False)
+    backward = fluid.layers.dynamic_gru(input=fc_backward,
+                                        size=hidden_dim,
+                                        param_attr=fluid.ParamAttr(name='gru_backward_encoder'),
+                                        is_reverse=True)
+
+    return forward, backward
+
+dialogue_forward, dialogue_backward = bigru_layer(dialogue_embedding)
+encoded_dialogue_vector = fluid.layers.concat(input=[dialogue_forward, dialogue_backward], axis=1)
 
 def encoder():
     src_word_id = fluid.layers.data(

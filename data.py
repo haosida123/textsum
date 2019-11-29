@@ -32,7 +32,7 @@ class MyCorpus(object):
             # assume there's one document per line, tokens separated by whitespace
             line = row['ColX'].split(' ') + row['Report'].split(' ')
             line = [word for word in line if word]
-            yield [vocab.to_tokens(vocab[word]) for word in line]
+            yield vocab.to_tokens([vocab.bos]) + [vocab.to_tokens(vocab[word]) for word in line] + vocab.to_tokens([vocab.eos] + [vocab.pad] * 20)
 
 
 class TextDataset():
