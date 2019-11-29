@@ -1,6 +1,7 @@
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import tensorflow as tf
-# import tensorflow_addons as tfa
+# from tensorflow_addons.seq2seq import BahdanauAttention as tfaBAttention
 import time
 import os
 import logging
@@ -13,10 +14,9 @@ from tf_eval import predict_array_input
 # from utils.config import data_path
 
 
-class Seq2seq_attention(tf.keras.Model):
+class Seq2seq_attention():
     def __init__(self, vocab_size, params, embedding_matrix=None):
-        super(Seq2seq_attention, self).__init__()
-        params = self.params = params.from_json()  # update if json changed
+        params = self.params = params.from_json()  # update if json file changed
         encoder = Encoder(vocab_size, params["embedding_dim"],
                           params["enc_dec_units"], params["batch_size"], embedding_matrix)
         decoder = Decoder(
@@ -33,28 +33,22 @@ class Seq2seq_attention(tf.keras.Model):
 
     @tf.function
     def train_step(self, inp, targ, enc_hidden, begin_id):
-        loss = tf.cast(0, tf.float32)
-        batch_size = len(inp)
+        loss = 0
         with tf.GradientTape() as tape:
             enc_output, enc_hidden = self.encoder(inp, enc_hidden)
             dec_hidden = enc_hidden
             dec_input = tf.expand_dims(
-                [begin_id] * batch_size, 1)
-            attention_coverage = tf.cast([0] * enc_output.shape[1], tf.float32)
-            attention_coverage = tf.zeros((batch_size, enc_output.shape[1]),
-                                          dtype=tf.float32)
+                [begin_id] * self.params["batch_size"], 1)
             # Teacher forcing - feeding the target as the next input
-            for t in tf.range(1, targ.shape[1]):
+            for t in range(1, targ.shape[1]):
                 # passing enc_output to the decoder
-                predictions, dec_hidden, att_weights = self.decoder(
+                predictions, dec_hidden, _ = self.decoder(
                     dec_input, dec_hidden, enc_output)
-                loss += self.loss_function(targ[:, t], predictions)
-                # Coverage loss
-                att_weights = tf.squeeze(att_weights, axis=2)
-                attention_coverage += att_weights
-                attention_coverage_loss = tf.reduce_sum(tf.reduce_min(tf.concat([
-                    attention_coverage, att_weights], axis=0), axis=0))
-                loss += attention_coverage_loss * self.coverage_weight
+                if self.my_loss_function is not None:
+                    loss += self.my_loss_function(targ[:, t], predictions)
+                else:
+                    loss += self.loss_function(targ[:, t], predictions)
+
                 # using teacher forcing
                 dec_input = tf.expand_dims(targ[:, t], 1)
         batch_loss = (loss / int(targ.shape[1]))
@@ -64,28 +58,17 @@ class Seq2seq_attention(tf.keras.Model):
         return batch_loss
 
     def train_epoch(
-        self,
-        dataset,
-        epochs,
-        steps_per_epoch,
-        begin_id,
-        coverage_weight=0.9,
-        optimizer=None,
-        loss_function=None,
-        restore_checkpoint=False,
-        callback=None,
+        self, dataset, epochs, steps_per_epoch, begin_id, optimizer=None,
+        loss_function=None, restore_checkpoint=False, callback=None,
         dataval=None
     ):
-        self.coverage_weight = coverage_weight
         self.optimizer = tf.keras.optimizers.Adam() if optimizer is None else optimizer
         self.loss_object = tf.keras.losses.SparseCategoricalCrossentropy(
             from_logits=True, reduction='none') if loss_function is None else None
-        if loss_function is not None:
-            self.loss_function = loss_function
+        self.my_loss_function = loss_function
         self.checkpoint = tf.train.Checkpoint(
             optimizer=self.optimizer, encoder=self.encoder, decoder=self.decoder)
-        self.checkpoint_dir = os.path.join(
-            self.params.data_path, 'training_checkpoints')
+        self.checkpoint_dir = os.path.join(self.params.data_path, 'training_checkpoints')
         checkpoint_prefix = os.path.join(self.checkpoint_dir, "ckpt")
         if restore_checkpoint:
             print('restoring checkpoint')
@@ -101,7 +84,11 @@ class Seq2seq_attention(tf.keras.Model):
             start = time.time()
             if callback is not None:
                 callback()
-            enc_hidden = self.encoder.initialize_hidden_state(batch_size=self.params["batch_size"])
+            enc_hidden = self.encoder.initialize_hidden_state(self.params["batch_size"])
+            if dataval is not None:
+                # print('test data loss:')
+                # print(self.teacher_forcing_test_loss(dataval, begin_id).numpy())
+                self.teacher_forcing_test_loss(dataval, begin_id)
             total_loss = 0
             for (batch, (inp, targ)) in enumerate(dataset.take(steps_per_epoch)):
                 batch_loss = self.train_step(
@@ -115,31 +102,23 @@ class Seq2seq_attention(tf.keras.Model):
             self.checkpoint.save(file_prefix=checkpoint_prefix)
             print('Epoch {} Loss {:.4f}'.format(epoch + 1,
                                                 total_loss / steps_per_epoch))
-            if dataval is not None:
-                # print('test data loss:')
-                # print(self.teacher_forcing_test_loss(dataval, begin_id).numpy())
-                self.teacher_forcing_test_loss(dataval, begin_id)
             print('Time taken for 1 epoch {} sec\n'.format(time.time() - start))
 
     def weight_info(self):
-        print('encoder:\n', '  \t'.join(
-            [layer.name + ':trainable: {}'.format(layer.trainable) for layer in self.encoder.layers]))
-        print('decoder:\n', '  \t'.join(
-            [layer.name + ':trainable: {}'.format(layer.trainable) for layer in self.decoder.layers]))
+        print('encoder:\n', '  \t'.join([layer.name + ':trainable: {}'.format(layer.trainable) for layer in self.encoder.layers]))
+        print('decoder:\n', '  \t'.join([layer.name + ':trainable: {}'.format(layer.trainable) for layer in self.decoder.layers]))
         name_shapes = [(v.name, v.shape, reduce(lambda x, y: x * y, v.shape)) for v in (
             self.encoder.trainable_variables + self.decoder.trainable_variables)]
         print(
             '\n'.join(['; '.join(
                 [nss[0], str(nss[1]), '{:,}'.format(
                     reduce(lambda x, y: x * y, nss[1]))]) for nss in name_shapes]))
-        print('total trainable weights: {:,}'.format(
-            sum([ns[2] for ns in name_shapes])))
+        print('total trainable weights: {:,}'.format(sum([ns[2] for ns in name_shapes])))
         return
 
     def restore_checkpoint(self):
         if not hasattr(self, "checkpoint"):
-            self.checkpoint_dir = os.path.join(
-                self.params.data_path, 'training_checkpoints')
+            self.checkpoint_dir = os.path.join(self.params.data_path, 'training_checkpoints')
             if not hasattr(self, "optimizer"):
                 self.checkpoint = tf.train.Checkpoint(
                     encoder=self.encoder, decoder=self.decoder)
@@ -155,24 +134,26 @@ class Seq2seq_attention(tf.keras.Model):
             input_array.numpy().tolist(), vocab, max_tar_length,
             self.encoder, self.decoder, targets, beam_search)
 
-    # @tf.function
     def teacher_forcing_test_loss(self, dataval, begin_id):
         """same as train loss calculating method"""
         start = time.time()
         total_loss = 0
         for (batch, (inp, targ)) in enumerate(dataval):
             loss = 0
-            enc_hidden = self.encoder.initialize_hidden_state(inputs=inp)
+            enc_hidden = tf.zeros((inp.shape[0], self.encoder.enc_units))
             enc_output, enc_hidden = self.encoder(inp, enc_hidden)
             dec_hidden = enc_hidden
             dec_input = tf.expand_dims(
                 [begin_id] * inp.shape[0], 1)
             # Teacher forcing - feeding the target as the next input
-            for t in tf.range(1, targ.shape[1]):
+            for t in range(1, targ.shape[1]):
                 # passing enc_output to the decoder
                 predictions, dec_hidden, _ = self.decoder(
                     dec_input, dec_hidden, enc_output)
-                loss += self.loss_function(targ[:, t], predictions)
+                if self.my_loss_function is not None:
+                    loss += self.my_loss_function(targ[:, t], predictions)
+                else:
+                    loss += self.loss_function(targ[:, t], predictions)
                 # using teacher forcing
                 dec_input = tf.expand_dims(targ[:, t], 1)
             batch_loss = (loss / int(targ.shape[1]))
@@ -190,12 +171,7 @@ class Encoder(tf.keras.Model):
         encoder output shape (batch_size, max_length, hidden_size)
         encoder hidden state shape (batch_size, hidden_size)'''
 
-    def __init__(self,
-                 vocab_size,
-                 embedding_dim,
-                 enc_units,
-                 batch_sz,
-                 embedding_matrix=None):
+    def __init__(self, vocab_size, embedding_dim, enc_units, batch_sz, embedding_matrix=None):
         super(Encoder, self).__init__()
         self.batch_sz = batch_sz
         self.enc_units = enc_units
@@ -208,40 +184,24 @@ class Encoder(tf.keras.Model):
         else:
             self.embedding = tf.keras.layers.Embedding(
                 vocab_size, embedding_dim)
-        self.lstm = tf.keras.layers.LSTM(enc_units,
-                                         return_state=True,
-                                         return_sequences=True)
+        self.gru = tf.keras.layers.GRU(self.enc_units,
+                                       return_sequences=True,
+                                       return_state=True,
+                                       recurrent_initializer='glorot_uniform')
 
     def call(self, x, hidden):
         x = self.embedding(x)
-        output, state_h, state_c = self.lstm(x, initial_state=hidden)
-        state = tf.concat((state_h, state_c), axis=1)
+        output, state = self.gru(x, initial_state=hidden)
         return output, state
 
-    def initialize_hidden_state(self, inputs=None, batch_size=None):
-        if inputs is not None:
-            _batch_size = len(inputs)
-        elif batch_size is not None:
-            _batch_size = batch_size
-        else:
-            _batch_size = self.batch_size
-        return [tf.zeros((_batch_size, self.enc_units)),
-                tf.zeros((_batch_size, self.enc_units))]
+    def initialize_hidden_state(self, batch_size):
+        return tf.zeros((batch_size, self.enc_units))
 
 
 class Decoder(tf.keras.Model):
-    """(self, vocab_size, embedding_dim, dec_units, batch_sz, attention_units,
-    attention='BahdanauAttention', embedding_matrix=None)"""
-
-    def __init__(self,
-                 vocab_size,
-                 embedding_dim,
-                 dec_units,
-                 batch_sz,
-                 attention_units,
-                 attention='BahdanauAttention',
-                 embedding_matrix=None,
-                 activation='softmax'):
+    """(self, vocab_size, embedding_dim, dec_units, batch_sz, attention_units, attention='BahdanauAttention', embedding_matrix=None)"""
+    def __init__(self, vocab_size, embedding_dim, dec_units, batch_sz, attention_units, attention='BahdanauAttention', embedding_matrix=None,
+    activation='softmax'):
         super(Decoder, self).__init__()
         self.batch_sz = batch_sz
         self.dec_units = dec_units
@@ -252,22 +212,20 @@ class Decoder(tf.keras.Model):
                 embeddings_initializer=tf.keras.initializers.Constant(
                     embedding_matrix),
                 trainable=False)
-            self.fc1 = tf.keras.layers.Dense(vocab_size, use_bias=False, kernel_initializer=tf.keras.initializers.Constant(
-                embedding_matrix.transpose()), activation=activation, trainable=False)
+            self.fc1 = tf.keras.layers.Dense(vocab_size, use_bias=False, kernel_initializer=tf.keras.initializers.Constant(embedding_matrix.transpose()), activation=activation, trainable=False)
             print('using pretrained embedding matrix')
         else:
             self.embedding = tf.keras.layers.Embedding(
                 vocab_size, embedding_dim)
-            self.fc1 = tf.keras.layers.Dense(
-                vocab_size, use_bias=False, activation=activation)
-        self.lstm = tf.keras.layers.LSTM(self.dec_units,
-                                         return_sequences=True,
-                                         return_state=True)
+            self.fc1 = tf.keras.layers.Dense(vocab_size, use_bias=False, activation=activation)
+        self.gru = tf.keras.layers.GRU(self.dec_units,
+                                       return_sequences=True,
+                                       return_state=True,
+                                       recurrent_initializer='glorot_uniform')
         self.fc0 = tf.keras.layers.Dense(embedding_dim)
         # used for attention
         if attention == 'BahdanauAttention':
-            self.attention = BahdanauAttention(
-                attention_units)  # self.dec_units)
+            self.attention = BahdanauAttention(attention_units)  # self.dec_units)
             # self.attention = tfaBAttention(attention_units)
         elif attention == 'MyAttention':
             self.attention = MyAttention(attention_units)  # self.dec_units)
@@ -283,7 +241,6 @@ class Decoder(tf.keras.Model):
         state: (batch, dec units)
         """
         # enc_output shape == (batch_size, max_length, hidden_size)
-        # query = tf.concat(hidden, axis=1)
         context_vector, attention_weights = self.attention(hidden, enc_output)
         # x shape before: (batch_size, 1)
         # x shape after passing through embedding == (batch_size, 1, embedding_dim)
@@ -291,13 +248,12 @@ class Decoder(tf.keras.Model):
         # x shape after concatenation == (batch_size, 1, embedding_dim + hidden_size)
         x = tf.concat([tf.expand_dims(context_vector, 1), x], axis=-1)
         # passing the concatenated vector to the GRU
-        hidden = hidden[:, :self.dec_units], hidden[:, self.dec_units:]
-        output, state_h, state_c = self.lstm(x, initial_state=hidden)
+        output, state = self.gru(x)
         # output shape == (batch_size * 1, hidden_size)
         output = tf.reshape(output, (-1, output.shape[2]))
         # output shape == (batch_size, vocab)
         x = self.fc1(self.fc0(output))
-        return x, tf.concat((state_h, state_c), axis=1), attention_weights
+        return x, state, attention_weights
 
 
 # * FC = Fully connected (dense) layer
@@ -342,7 +298,6 @@ class BahdanauAttention(tf.keras.layers.Layer):
 
 class MyAttention(tf.keras.layers.Layer):
     def __init__(self, units):
-        raise NotImplementedError
         super(BahdanauAttention, self).__init__()
         self.W1 = tf.keras.layers.Dense(units)
         self.W2 = tf.keras.layers.Dense(units)
@@ -383,8 +338,7 @@ def fasttext_embedding(params, load_file=True, sentences=None):
     if not load_file:
         if sentences is None:
             raise (RuntimeError, 'arg sentences should be a generator of sentences')
-        logging.basicConfig(
-            format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+        logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
         # sentences = MyCorpus()
         modelfasttext = gensim.models.fasttext.FastText(sentences=sentences,
                                                         size=params.embedding_dim, window=5, min_count=params.vocab_min_frequency, workers=3)
@@ -396,14 +350,12 @@ def fasttext_embedding(params, load_file=True, sentences=None):
 
 
 def layer_info(layer):
-    name_shapes = [(v.name, v.shape, reduce(lambda x, y: x * y, v.shape))
-                   for v in layer.trainable_variables]
+    name_shapes = [(v.name, v.shape, reduce(lambda x, y: x * y, v.shape)) for v in layer.trainable_variables]
     print(
         '\n'.join(['; '.join(
             [nss[0], str(nss[1]), '{:,}'.format(
                 reduce(lambda x, y: x * y, nss[1]))]) for nss in name_shapes]))
-    print('total trainable weights: {:,}'.format(
-        sum([ns[2] for ns in name_shapes])))
+    print('total trainable weights: {:,}'.format(sum([ns[2] for ns in name_shapes])))
     return
 # def load_encoder_decoder(vocab_size, params, checkpoint_dir=None, optimizer=None, embedding_matrix=None):
 #     """

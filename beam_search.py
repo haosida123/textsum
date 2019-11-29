@@ -82,6 +82,7 @@ class BeamSearch(object):
         self._max_steps = max_steps
         self.normalize_by_length = normalize_by_length
 
+    # @tf.function
     def beam_search(self, enc_inputs):
         """Performs beam search for decoding.
 
@@ -112,9 +113,9 @@ class BeamSearch(object):
             # print([t.shape for t in [latest_tokens, states, enc_top_states]])
             outputs, new_states, _ = self._model.decoder(
                 latest_tokens, states, enc_top_states)
-            topk_ids = np.argsort(
+            topk_ids = tf.argsort(
                 outputs, axis=1)[:, ::-1][:, :self._beam_size * 2]
-            topk_log_probs = np.log(np.sort(
+            topk_log_probs = tf.math.log(tf.sort(
                 outputs, axis=1)[:, ::-1][:, :self._beam_size * 2])
             # # id_prob_state = sorted(
             # #     [(idx, np.log(lo), state) for (idx, lo, state) in
@@ -154,6 +155,7 @@ class BeamSearch(object):
 
         return self._BestHyps(results)
 
+    # @tf.function
     def _BestHyps(self, hyps):
         """Sort the hyps based on log probs and length.
 
@@ -164,15 +166,26 @@ class BeamSearch(object):
         """
         # This length normalization is only effective for the final results.
         if self.normalize_by_length:
-            return sorted(hyps, key=lambda h: h.log_prob/len(h.tokens), reverse=True)
+            ret = [h.log_prob for h in hyps]
         else:
-            return sorted(hyps, key=lambda h: h.log_prob, reverse=True)
+            ret = [h.log_prob / (len(h.tokens) + 1) for h in hyps]
+        # tf.print(type(ret))
+        # assert(type(ret) == tf.Tensor)
+        idx = tf.argsort(tf.convert_to_tensor(ret), direction='DESCENDING')
+        return [hyps[i] for i in idx]
+        # if self.normalize_by_length:
+        #     return sorted(hyps, key=lambda h: h.log_prob / (len(h.tokens) + 1), reverse=True)
+        #     # return tf.sort(hyps, key=lambda h: h.log_prob / (len(h.tokens) + 1), direction='DESCENDING')
+        # else:
+        #     return sorted(hyps, key=lambda h: h.log_prob, reverse=True)
+        #     # return tf.sort(hyps, key=lambda h: h.log_prob, direction='DESCENDING')
 
     def print_beam_search(self, enc_inputs, vocab, targets=None):
         hyps = self.beam_search(enc_inputs)
         print('Beam search inputs:\t' + ''.join(
             [vocab.to_tokens(w) for w in enc_inputs if w not in [
-                vocab.bos, vocab.eos, vocab.pad]
+                vocab.pad]
+                # vocab.bos, vocab.eos, vocab.pad]
              ]).replace('seperator', ','))
         if targets is not None:
             print('Target:\t{}'.format(
@@ -180,6 +193,7 @@ class BeamSearch(object):
                         ).replace('seperator', ',')))
         print('Predicted:')
         for hyp in hyps[:5]:
-            print('\t\tprob:{:.4e}'.format(np.exp(hyp.log_prob)))
+            print('\t\tprob:{:.4e}'.format(tf.exp(hyp.log_prob)))
             print('\t\t{}'.format(
-                ''.join([vocab.to_tokens(t) for t in hyp.tokens if t not in [vocab.bos, vocab.eos, vocab.pad, vocab.unk]]).replace('seperator', ',')))
+                ''.join([vocab.to_tokens(t) for t in hyp.tokens if t not in [vocab.pad, vocab.unk]]).replace('seperator', ',')))
+                # ''.join([vocab.to_tokens(t) for t in hyp.tokens if t not in [vocab.bos, vocab.eos, vocab.pad, vocab.unk]]).replace('seperator', ',')))

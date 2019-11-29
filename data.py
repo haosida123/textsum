@@ -16,7 +16,9 @@ class MyCorpus(object):
     def __init__(self, df=None):
         # self.min_freq = params.vocab_min_frequency
         if df is None:
-            df, _ = gen_cut_csv('r')
+            dfcut, df1cut = gen_cut_csv('r')
+            df = pd.concat([dfcut, df1cut], axis=0, sort=False
+                   ).fillna('')
             self.vocab = Vocab.from_json(
                 vocab_train_test_path, min_freq=params.vocab_min_frequency, use_special_tokens=True)
         else:
