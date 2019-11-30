@@ -182,7 +182,7 @@ class BeamSearch(object):
 
     def print_beam_search(self, enc_inputs, vocab, targets=None):
         hyps = self.beam_search(enc_inputs)
-        print('Beam search inputs:\t' + ''.join(
+        print('Inputs:\t' + ''.join(
             [vocab.to_tokens(w) for w in enc_inputs if w not in [
                 vocab.pad]
                 # vocab.bos, vocab.eos, vocab.pad]
@@ -191,9 +191,9 @@ class BeamSearch(object):
             print('Target:\t{}'.format(
                 ''.join([vocab.to_tokens(t) for t in targets if t not in [vocab.bos, vocab.eos, vocab.pad]]
                         ).replace('seperator', ',')))
-        print('Predicted:')
+        print('Beam search Predicted:')
         for hyp in hyps[:5]:
-            print('\t\tprob:{:.4e}'.format(tf.exp(hyp.log_prob)))
-            print('\t\t{}'.format(
+            print('\tprob:{:.4e}'.format(tf.exp(hyp.log_prob)))
+            print('\t{}'.format(
                 ''.join([vocab.to_tokens(t) for t in hyp.tokens if t not in [vocab.pad, vocab.unk]]).replace('seperator', ',')))
                 # ''.join([vocab.to_tokens(t) for t in hyp.tokens if t not in [vocab.bos, vocab.eos, vocab.pad, vocab.unk]]).replace('seperator', ',')))

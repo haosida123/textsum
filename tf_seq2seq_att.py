@@ -23,6 +23,7 @@ class Seq2seq_attention(tf.keras.Model):
             vocab_size, params["embedding_dim"], params["enc_dec_units"], params["batch_size"], params["att_units"], attention=params["attention"], embedding_matrix=embedding_matrix, activation=params["activation"])
         self.encoder = encoder
         self.decoder = decoder
+        self.optimizer = None
 
     def loss_function(self, real, pred):
         mask = tf.math.logical_not(tf.math.equal(real, 0))
@@ -57,6 +58,7 @@ class Seq2seq_attention(tf.keras.Model):
                 loss += attention_coverage_loss * self.coverage_weight
                 # using teacher forcing
                 dec_input = tf.cast(tf.expand_dims(targ[:, t], 1), tf.int32)
+                # TODO: schduled sampling
         batch_loss = (loss / int(targ.shape[1]))
         variables = self.encoder.trainable_variables + self.decoder.trainable_variables
         gradients = tape.gradient(loss, variables)
@@ -101,13 +103,14 @@ class Seq2seq_attention(tf.keras.Model):
             start = time.time()
             if callback is not None:
                 callback()
-            enc_hidden = self.encoder.initialize_hidden_state(batch_size=self.params["batch_size"])
+            enc_hidden = self.encoder.initialize_hidden_state(
+                batch_size=self.params["batch_size"])
             total_loss = 0
             for (batch, (inp, targ)) in enumerate(dataset.take(steps_per_epoch)):
                 batch_loss = self.train_step(
                     inp, targ, enc_hidden, begin_id)
                 total_loss += batch_loss
-                if batch % (steps_per_epoch // 100 + 1) == 0:
+                if batch % (steps_per_epoch // 50 + 1) == 0:
                     print('Epoch {} Batch {} Loss {:.4f} Time {}'.format(
                         epoch + 1, batch, batch_loss.numpy(), time.time() - start))
             # saving (checkpoint) the model every 2 epochs
@@ -137,10 +140,13 @@ class Seq2seq_attention(tf.keras.Model):
         return
 
     def restore_checkpoint(self):
+        if (not self.encoder.built or
+                not self.decoder.built or not self.built):
+            self(None)
         if not hasattr(self, "checkpoint"):
             self.checkpoint_dir = os.path.join(
                 self.params.data_path, 'training_checkpoints')
-            if not hasattr(self, "optimizer"):
+            if self.optimizer is None:
                 self.checkpoint = tf.train.Checkpoint(
                     encoder=self.encoder, decoder=self.decoder)
             else:
@@ -182,6 +188,29 @@ class Seq2seq_attention(tf.keras.Model):
         print('Test Loss {:.4f} Time {}'.format(
             total_loss / (batch + 1), time.time() - start))
         return total_loss
+
+    def call(self, sample_input):
+        """No use, only for initializing"""
+        sample_input = tf.convert_to_tensor([[1]])
+        enc_out, state = self.encoder(
+            sample_input, self.encoder.initialize_hidden_state(batch_size=1))
+        dec_out, state, _ = self.decoder(sample_input, state, enc_out)
+        print("Seq2seq_attention weights built")
+        # return dec_out
+
+    def summary(self):
+        if (not self.encoder.built or
+                not self.decoder.built or not self.built):
+            self(None)
+        self.encoder.summary()
+        self.decoder.summary()
+        print('encoder:\n', '  \t'.join(
+            [layer.name + ':trainable: {}'.format(layer.trainable)
+                for layer in self.encoder.layers]))
+        print('decoder:\n', '  \t'.join(
+            [layer.name + ':trainable: {}'.format(layer.trainable)
+                for layer in self.decoder.layers]))
+        super(Seq2seq_attention, self).summary()
 
 
 class Encoder(tf.keras.Model):
@@ -291,7 +320,8 @@ class Decoder(tf.keras.Model):
         # x shape after concatenation == (batch_size, 1, embedding_dim + hidden_size)
         x = tf.concat([tf.expand_dims(context_vector, 1), x], axis=-1)
         # passing the concatenated vector to the GRU
-        hidden = hidden[:, :self.dec_units], hidden[:, self.dec_units:]
+        hidden = tf.split(hidden, 2, axis=1)
+        # hidden = hidden[:, :self.dec_units], hidden[:, self.dec_units:]
         output, state_h, state_c = self.lstm(x, initial_state=hidden)
         # output shape == (batch_size * 1, hidden_size)
         output = tf.reshape(output, (-1, output.shape[2]))

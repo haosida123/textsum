@@ -41,10 +41,10 @@ def train(dataset, dataval, seq_length_x, seq_length_y, steps_per_epoch, vocab):
     seq2seq.encoder.embedding.trainable = False
     seq2seq.decoder.embedding.trainable = False
     seq2seq.decoder.fc1.trainable = False
-    it = iter(dataset.unbatch())
+    it = iter(dataval.unbatch())
     inp, out = next(it)
-    # beam_search = BeamSearch(seq2seq, 9, vocab.bos, vocab.eos, max(seq_length_y))
-    # seq2seq.compare_input_output(inp, vocab, max(seq_length_y), out, beam_search)
+    beam_search = BeamSearch(seq2seq, 9, vocab.bos, vocab.eos, max(seq_length_y))
+    seq2seq.compare_input_output(inp, vocab, max(seq_length_y), out, beam_search)
     seq2seq.weight_info()
     # seq2seq.encoder.summary()
     # seq2seq.decoder.summary()
@@ -57,13 +57,47 @@ def train(dataset, dataval, seq_length_x, seq_length_y, steps_per_epoch, vocab):
             inp, out = next(it)
             seq2seq.compare_input_output(inp, vocab, max(seq_length_y), out, beam_search)
 
-    seq2seq.train_epoch(dataset, 5, steps_per_epoch, vocab.bos,
-                        restore_checkpoint=True, dataval=dataval, callback=None)
     # seq2seq.train_epoch(dataset, 5, steps_per_epoch, vocab.bos,
-    #                     restore_checkpoint=True, dataval=dataval, callback=callback)
+    #                     restore_checkpoint=True, dataval=dataval, callback=None)
+    seq2seq.train_epoch(dataset, 5, steps_per_epoch, vocab.bos,
+                        restore_checkpoint=True, dataval=dataval, callback=callback)
     callback()
+
 # tf.config.experimental_run_functions_eagerly(True)
 train(dataset, dataval, seq_length_x, seq_length_y, steps_per_epoch, vocab)
 
 
 # %%
+def check_train_results():
+    seq2seq = Seq2seq_attention(
+        len(vocab), params, embedding_matrix=fasttext_embedding(params, sentences=None))
+    seq2seq.encoder.embedding.trainable = False
+    seq2seq.decoder.embedding.trainable = False
+    seq2seq.decoder.fc1.trainable = False
+    it = iter(dataval.unbatch())
+    inp, out = next(it)
+    beam_search = BeamSearch(seq2seq, 9, vocab.bos, vocab.eos, max(seq_length_y))
+    # seq2seq.compare_input_output(inp, vocab, max(seq_length_y), out, beam_search)
+    seq2seq.summary()
+    def callback():
+            for _ in range(10):
+                inp, out = next(it)
+                seq2seq.compare_input_output(inp, vocab, max(seq_length_y), out, beam_search)
+
+    # seq2seq.train_epoch(dataset, 5, steps_per_epoch, vocab.bos,
+    #                     restore_checkpoint=True, dataval=dataval, callback=None)
+    # seq2seq.train_epoch(dataset, 5, steps_per_epoch, vocab.bos,
+    #                     restore_checkpoint=True, dataval=dataval, callback=callback)
+    seq2seq.restore_checkpoint()
+    callback()
+
+
+check_train_results()
+
+# %%
+
+# %%
+
+
+# %%
+
