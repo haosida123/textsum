@@ -18,7 +18,7 @@ class MyCorpus(object):
         if df is None:
             dfcut, df1cut = gen_cut_csv('r')
             df = pd.concat([dfcut, df1cut], axis=0, sort=False
-                   ).fillna('')
+                           ).fillna('')
             self.vocab = Vocab.from_json(
                 vocab_train_test_path, min_freq=params.vocab_min_frequency, use_special_tokens=True)
         else:
@@ -89,11 +89,12 @@ class TextDataset():
             except Exception as e:
                 print('expected', e, '\ncontinuing')
                 self.train_lines_x = self._df2lines(df_train.loc[:, ['ColX']])
-                self.train_lines_y = self._df2lines(df_train.loc[:, ['Report']])
+                self.train_lines_y = self._df2lines(
+                    df_train.loc[:, ['Report']])
                 self.test_lines_x = self._df2lines(df_test.loc[:, ['ColX']])
                 with open(os.path.join(data_path, 'textdatasetxy.json'), 'w') as fp:
-                    json.dump((self.train_lines_x, self.train_lines_y, self.test_lines_x), fp)
-
+                    json.dump(
+                        (self.train_lines_x, self.train_lines_y, self.test_lines_x), fp)
 
     def _df2lines(self, df):
         print('tokenizing lines')
@@ -155,6 +156,25 @@ class TextDataset():
             sentences, self.vocab, x_max_length, is_source=True)
         return npx, x_seq_length
 
+    def to_generator(self, x, y):
+        """return a generator for data reading and bucketing"""
+        y = [[self.vocab.bos] + l + [self.vocab.eos] for
+             l in y]
+        return lambda: zip(x, y)
+        # used for: bucket_by_sequence_length
+        # tf.data.experimental.bucket_by_sequence_length
+        # https://www.tensorflow.org/api_docs/python/tf/data/experimental/bucket_by_sequence_length
+        # https://stackoverflow.com/questions/50606178/tensorflow-tf-data-dataset-and-bucketing
+
+    @staticmethod
+    def get_bucketing_boundaries_batchsizes(lengths, batchsize):
+        lengths.sort()
+        steps, last_batch = divmod(len(lengths), batchsize)  # total # of batches
+        batchsizes = [batchsize] * steps + [last_batch]
+        bounds = np.percentile(lengths, np.arange(0, 100, 100/steps)[:steps])
+        bounds = [int(b) for b in bounds]
+        return bounds, batchsizes, steps
+
     @staticmethod
     def trim_pad(line, num_steps, padding_token):
         if len(line) > num_steps:
@@ -187,10 +207,6 @@ class TextDataset():
         print('selecting:', ret)
         return ret
 
-    # TODO: bucket_by_sequence_length
-    # tf.data.experimental.bucket_by_sequence_length
-    # https://www.tensorflow.org/api_docs/python/tf/data/experimental/bucket_by_sequence_length
-    # https://stackoverflow.com/questions/50606178/tensorflow-tf-data-dataset-and-bucketing
     def element_length(self, array):
         """return length of array without padding"""
         return sum(array != self.vocab.pad)

@@ -13,10 +13,10 @@ from tf_eval import predict_array_input
 # from utils.config import data_path
 
 
-class Seq2seq_attention(tf.keras.Model):
+class Seq2seq_attention():
     def __init__(self, vocab_size, params, embedding_matrix=None):
         super(Seq2seq_attention, self).__init__()
-        params = self.params = params.from_json()  # update if json changed
+        self.params = params
         encoder = Encoder(vocab_size, params["embedding_dim"],
                           params["enc_dec_units"], params["batch_size"], embedding_matrix)
         decoder = Decoder(
@@ -26,16 +26,20 @@ class Seq2seq_attention(tf.keras.Model):
         self.optimizer = None
 
     def loss_function(self, real, pred):
+        if not hasattr(self, "loss_object"):
+            self.loss_object = tf.keras.losses.SparseCategoricalCrossentropy(
+                from_logits=True, reduction='none')
         mask = tf.math.logical_not(tf.math.equal(real, 0))
         loss_ = self.loss_object(real, pred)
         mask = tf.cast(mask, dtype=loss_.dtype)
         loss_ *= mask
         return tf.reduce_mean(loss_)
 
+    # @tf.function(experimental_relax_shapes=True)
     @tf.function
     def train_step(self, inp, targ, enc_hidden, begin_id):
+        batch_size = inp.shape[0]
         loss = tf.cast(0, tf.float32)
-        batch_size = len(inp)
         with tf.GradientTape() as tape:
             enc_output, enc_hidden = self.encoder(inp, enc_hidden)
             dec_hidden = enc_hidden
@@ -101,14 +105,12 @@ class Seq2seq_attention(tf.keras.Model):
             epochs, steps_per_epoch, self.params["batch_size"]))
         for epoch in range(epochs):
             start = time.time()
-            if callback is not None:
-                callback()
-            enc_hidden = self.encoder.initialize_hidden_state(
-                batch_size=self.params["batch_size"])
             total_loss = 0
             for (batch, (inp, targ)) in enumerate(dataset.take(steps_per_epoch)):
+                enc_hidden = self.encoder.initialize_hidden_state(
+                    inputs=inp)
                 batch_loss = self.train_step(
-                    inp, targ, enc_hidden, begin_id)
+                    inp, targ, enc_hidden, tf.cast(begin_id, tf.int32))
                 total_loss += batch_loss
                 if batch % (steps_per_epoch // 50 + 1) == 0:
                     print('Epoch {} Batch {} Loss {:.4f} Time {}'.format(
@@ -122,9 +124,14 @@ class Seq2seq_attention(tf.keras.Model):
                 # print('test data loss:')
                 # print(self.teacher_forcing_test_loss(dataval, begin_id).numpy())
                 self.teacher_forcing_test_loss(dataval, begin_id)
+            if callback is not None:
+                callback()
             print('Time taken for 1 epoch {} sec\n'.format(time.time() - start))
 
     def weight_info(self):
+        if (not self.encoder.built or
+                not self.decoder.built):
+            self.initialize()
         print('encoder:\n', '  \t'.join(
             [layer.name + ':trainable: {}'.format(layer.trainable) for layer in self.encoder.layers]))
         print('decoder:\n', '  \t'.join(
@@ -141,8 +148,8 @@ class Seq2seq_attention(tf.keras.Model):
 
     def restore_checkpoint(self):
         if (not self.encoder.built or
-                not self.decoder.built or not self.built):
-            self(None)
+                not self.decoder.built):
+            self.initialize()
         if not hasattr(self, "checkpoint"):
             self.checkpoint_dir = os.path.join(
                 self.params.data_path, 'training_checkpoints')
@@ -166,7 +173,7 @@ class Seq2seq_attention(tf.keras.Model):
         """same as train loss calculating method"""
         start = time.time()
         total_loss = 0
-        for (batch, (inp, targ)) in enumerate(dataval):
+        for (batch, (inp, targ)) in enumerate(dataval.batch(1)):
             loss = 0
             enc_hidden = self.encoder.initialize_hidden_state(inputs=inp)
             enc_output, enc_hidden = self.encoder(inp, enc_hidden)
@@ -189,8 +196,8 @@ class Seq2seq_attention(tf.keras.Model):
             total_loss / (batch + 1), time.time() - start))
         return total_loss
 
-    def call(self, sample_input):
-        """No use, only for initializing"""
+    def initialize(self):
+        """for initializing"""
         sample_input = tf.convert_to_tensor([[1]])
         enc_out, state = self.encoder(
             sample_input, self.encoder.initialize_hidden_state(batch_size=1))
@@ -200,8 +207,8 @@ class Seq2seq_attention(tf.keras.Model):
 
     def summary(self):
         if (not self.encoder.built or
-                not self.decoder.built or not self.built):
-            self(None)
+                not self.decoder.built):
+            self.initialize()
         self.encoder.summary()
         self.decoder.summary()
         print('encoder:\n', '  \t'.join(
@@ -210,7 +217,7 @@ class Seq2seq_attention(tf.keras.Model):
         print('decoder:\n', '  \t'.join(
             [layer.name + ':trainable: {}'.format(layer.trainable)
                 for layer in self.decoder.layers]))
-        super(Seq2seq_attention, self).summary()
+        # super(Seq2seq_attention, self).summary()
 
 
 class Encoder(tf.keras.Model):
