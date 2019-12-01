@@ -41,46 +41,32 @@ class Seq2seq_attention():
     #     tf.TensorSpec(shape=(None), dtype=tf.int32),
     #     ])
     @tf.function
-    def train_step(self, inp, targ, enc_hidden, begin_id, y_max_length):
-        # tf.print('\n\n\n', output_stream=sys.stderr)
-        # tf.print(inp.shape, targ.shape, enc_hidden[0].shape,
-        #     enc_hidden[1].shape, begin_id, y_max_length, output_stream=sys.stderr)
-        # tf.print('\n\n\n', output_stream=sys.stderr)
+    def train_step(self, inp, targ, enc_hidden, begin_id):
         batch_size = inp.shape[0]
         loss = tf.cast(0, tf.float32)
-        # loss = 0
         with tf.GradientTape() as tape:
             enc_output, enc_hidden = self.encoder(inp, enc_hidden)
             dec_hidden = enc_hidden
             dec_input = tf.cast(tf.expand_dims(
                 [begin_id] * batch_size, 1), tf.int32)
+            attention_coverage = tf.cast([0] * enc_output.shape[1], tf.float32)
             attention_coverage = tf.zeros((batch_size, enc_output.shape[1]),
                                           dtype=tf.float32)
             # Teacher forcing - feeding the target as the next input
-            time = tf.constant(0, dtype=tf.int32)
-            finished, dec_input = sampler.initialize(dec_input, sequence_length=)
-            while not finished:
+            for t in tf.range(1, targ.shape[1]):
                 # passing enc_output to the decoder
                 predictions, dec_hidden, att_weights = self.decoder(
                     dec_input, dec_hidden, enc_output)
-                # schduled sampling
-                sample_ids = sampler.sample(    
-                    time=time, outputs=predictions, state=dec_hidden)
-                (finished, dec_input, dec_hidden) = sampler.next_inputs(
-                    time=time,
-                    outputs=predictions,
-                    state=dec_hidden,
-                    sample_ids=sample_ids)
-                # loss
                 loss += self.loss_function(targ[:, t], predictions)
                 # Coverage loss
                 att_weights = tf.squeeze(att_weights, axis=2)
                 attention_coverage += att_weights
-                coverage_loss = tf.reduce_sum(tf.reduce_min(tf.concat([
+                attention_coverage_loss = tf.reduce_sum(tf.reduce_min(tf.concat([
                     attention_coverage, att_weights], axis=0), axis=0))
-                loss += coverage_loss * self.coverage_weight
-                # not using teacher forcing
-                # dec_input = tf.cast(tf.expand_dims(targ[:, t], 1), tf.int32)
+                loss += attention_coverage_loss * self.coverage_weight
+                # using teacher forcing
+                dec_input = tf.cast(tf.expand_dims(targ[:, t], 1), tf.int32)
+                # TODO: schduled sampling
         batch_loss = (loss / int(targ.shape[1]))
         variables = self.encoder.trainable_variables + self.decoder.trainable_variables
         gradients = tape.gradient(loss, variables)
