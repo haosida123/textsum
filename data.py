@@ -49,7 +49,7 @@ class TextDataset():
 
         Attributes
         ----------
-        train_lines/text_lines: list with shape (sentences #, sentence length) and 
+        train_lines/text_lines: list with shape (sentences #, sentence length) and
         corresponding vocabulary for translation
 
         vocab: vocabulary which transform between numbers and words
@@ -122,9 +122,15 @@ class TextDataset():
             corresponding length of output sentences
         """
         x_max_length = self.decide_max_length(
-            [len(l) for l in self.train_lines_x])
+            [len(l) for l in self.train_lines_x],
+            params.decide_length_percentile1,
+            params.decide_length_percentile2
+        )
         y_max_length = self.decide_max_length(
-            [len(l) for l in self.train_lines_y])
+            [len(l) for l in self.train_lines_y],
+            params.decide_length_percentile1,
+            params.decide_length_percentile2
+        )
         npx, self.x_seq_length = self.build_array(
             self.train_lines_x, self.vocab, x_max_length, is_source=True)
         npy, self.y_seq_length = self.build_array(
@@ -151,7 +157,10 @@ class TextDataset():
         else:
             raise (RuntimeError, 'no sentences input or test dataframe')
         x_max_length = self.decide_max_length(
-            [len(l) for l in sentences])
+            [len(l) for l in sentences],
+            params.decide_length_percentile1,
+            params.decide_length_percentile2
+        )
         npx, x_seq_length = self.build_array(
             sentences, self.vocab, x_max_length, is_source=True)
         return npx, x_seq_length
@@ -166,10 +175,28 @@ class TextDataset():
         # https://www.tensorflow.org/api_docs/python/tf/data/experimental/bucket_by_sequence_length
         # https://stackoverflow.com/questions/50606178/tensorflow-tf-data-dataset-and-bucketing
 
+    def trim_train_lines(self):
+        print("x length:")
+        x_max_length = self.decide_max_length(
+            sorted([len(x) for x in self.train_lines_x]),
+            params.bucket_length_percentile1,
+            params.bucket_length_percentile2)
+        self.train_lines_x = [line[:x_max_length] for line in
+                              self.train_lines_x]
+        print("y length:")
+        y_max_length = self.decide_max_length(
+            sorted([len(y) for y in self.train_lines_y]),
+            params.bucket_length_percentile1,
+            params.bucket_length_percentile2)
+        self.train_lines_y = [line[:y_max_length] for line in
+                              self.train_lines_y]
+        return x_max_length, y_max_length
+
     @staticmethod
     def get_bucketing_boundaries_batchsizes(lengths, batchsize):
         lengths.sort()
-        steps, last_batch = divmod(len(lengths), batchsize)  # total # of batches
+        steps, last_batch = divmod(
+            len(lengths), batchsize)  # total # of batches
         batchsizes = [batchsize] * steps + [last_batch]
         bounds = np.percentile(lengths, np.arange(0, 100, 100/steps)[:steps])
         bounds = [int(b) for b in bounds]
@@ -192,16 +219,16 @@ class TextDataset():
         return array, valid_len
 
     @staticmethod
-    def decide_max_length(lengths):
+    def decide_max_length(lengths, percentile1, percentile2):
         """Calculate the 99-percentile of the length of data lines
         lengths: a list of length of entries"""
         lengths.sort()
         ret = np.percentile(lengths, 99)
-        print('line min, max, and 99-percentile:\n',
-              lengths[0], lengths[-1], ret)
+        print('line percentiles:\n',
+              np.percentile(lengths, list(range(0, 101, 10))))
         ret = int(min(
-            np.percentile(lengths, params.decide_length_percentile1) +
-            np.percentile(lengths, params.decide_length_percentile2),
+            np.percentile(lengths, percentile1) +
+            np.percentile(lengths, percentile2),
             lengths[-1]))
         # ret = lengths[-1]
         print('selecting:', ret)
