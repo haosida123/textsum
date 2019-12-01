@@ -25,11 +25,13 @@ def load_data_trim(params):
     steps_per_epoch = len(input_tensor_train)//params.batch_size
 
     dataset = tf.data.Dataset.from_tensor_slices(
-        (input_tensor_train, target_tensor_train)).shuffle(BUFFER_SIZE)
+        (tf.cast(input_tensor_train, tf.int32),
+         tf.cast(target_tensor_train, tf.int32))).shuffle(BUFFER_SIZE)
     dataset = dataset.batch(params.batch_size, drop_remainder=True)
     dataval = tf.data.Dataset.from_tensor_slices(
-        (input_tensor_val, target_tensor_val)).batch(
-            params.batch_size)  # , drop_remainder=True)
+        (tf.cast(input_tensor_val, tf.int32),
+         tf.cast(target_tensor_val, tf.int32))).batch(
+        params.batch_size)  # , drop_remainder=True)
     return dataset, dataval.unbatch(), max(seq_length_y), steps_per_epoch, datatext.vocab
 
 
@@ -49,7 +51,7 @@ def load_data_buckets(params):
         TextDataset.get_bucketing_boundaries_batchsizes(
             [len(l) for l in x_train], params.batch_size)
     print("boundaries:", [bucket_boundaries[i] for i in range(0,
-        steps_per_epoch, steps_per_epoch//10) if i < len(bucket_boundaries)])
+                                                              steps_per_epoch, steps_per_epoch//10) if i < len(bucket_boundaries)])
     print("step size", steps_per_epoch)
     dataset = dataset.apply(tf.data.experimental.bucket_by_sequence_length(
         lambda x, y: tf.shape(x)[0],
@@ -57,7 +59,7 @@ def load_data_buckets(params):
         batchsizes,
         padding_values=(textdata.vocab.pad, textdata.vocab.pad),
         drop_remainder=True))
-        # padded_shapes=([None], [None])))
+    # padded_shapes=([None], [None])))
 
     dataval = tf.data.Dataset.from_generator(
         textdata.to_generator(x_val, y_val),
@@ -147,6 +149,7 @@ def arg_true_false(args, arglist):
                 a, args.__dict__[a]))
             raise TypeError
 
+
 # %%
 if __name__ == '__main__':
     parser = ArgumentParser(description='train model from data')
@@ -160,10 +163,15 @@ if __name__ == '__main__':
                         )
     parser.add_argument("-v", "--epoch_verbosity", type=int, default=50
                         )
+    parser.add_argument("-eager", "--eagerly", default=False,
+                        action="store_true")
     args = parser.parse_args()
     arg_true_false(args, ["use_bucket", "restore"])
     params.__dict__.update(args.__dict__)
     print('\n'.join([str(kv) for kv in params.__dict__.items()]))
+    if args.eagerly:
+        print("running eagerly")
+        tf.config.experimental_run_functions_eagerly(True)
     if args.use_bucket:
         dataset, dataval, y_max_length, steps_per_epoch, vocab = \
             load_data_buckets(params)
@@ -176,12 +184,10 @@ if __name__ == '__main__':
     # elif args.mode == 'test':
     #     test(args)
 
-    # tf.config.experimental_run_functions_eagerly(True)
-
     check_train_results(dataval, y_max_length, steps_per_epoch, vocab, params)
 
 
-#%%
+# %%
 # params.batch_size=2
 # dataset, dataval, y_max_length, steps_per_epoch, vocab = \
 #             load_data_trim(params)

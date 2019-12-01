@@ -6,7 +6,7 @@
 * attention coverage loss
 * beam search
 
-* bucket batch, longer/varing sequence: low traing performance
+* bucket batch, longer/varing sequence: low traing performance solved by adding input_signature
 
 ## TODO:
 * scheduled sampling

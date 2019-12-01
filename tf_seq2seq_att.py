@@ -32,28 +32,31 @@ class Seq2seq_attention():
         return tf.reduce_mean(loss_)
 
     # @tf.function(experimental_relax_shapes=True)
-    # @tf.function(input_signature=[
-    #     tf.TensorSpec(shape=[None, None], dtype=tf.int32),
-    #     tf.TensorSpec(shape=[None, None], dtype=tf.int32),
-    #     (tf.TensorSpec(shape=[None, None], dtype=tf.float32),
-    #      tf.TensorSpec(shape=[None, None], dtype=tf.float32)),
-    #     tf.TensorSpec(shape=(None), dtype=tf.int32),
-    #     tf.TensorSpec(shape=(None), dtype=tf.int32),
-    #     ])
-    @tf.function
-    def train_step(self, inp, targ, enc_hidden, begin_id):
-        batch_size = inp.shape[0]
+    # @tf.function
+    @tf.function(input_signature=[
+        tf.TensorSpec(shape=[None, None], dtype=tf.int32),
+        tf.TensorSpec(shape=[None, None], dtype=tf.int32),
+        [tf.TensorSpec(shape=[None, None], dtype=tf.float32),
+         tf.TensorSpec(shape=[None, None], dtype=tf.float32)],
+        tf.TensorSpec(shape=(), dtype=tf.int32),
+        tf.TensorSpec(shape=(), dtype=tf.int32),
+        tf.TensorSpec(shape=(), dtype=tf.int32),
+        tf.TensorSpec(shape=(), dtype=tf.int32),
+        ])
+    def train_step(self, inp, targ, enc_hidden, begin_id, batch_size,
+                   x_seq_len, y_seq_len):
+        # batch_size = inp.shape[0]
         loss = tf.cast(0, tf.float32)
         with tf.GradientTape() as tape:
             enc_output, enc_hidden = self.encoder(inp, enc_hidden)
             dec_hidden = enc_hidden
-            dec_input = tf.cast(tf.expand_dims(
-                [begin_id] * batch_size, 1), tf.int32)
-            attention_coverage = tf.cast([0] * enc_output.shape[1], tf.float32)
-            attention_coverage = tf.zeros((batch_size, enc_output.shape[1]),
+            # dec_input = tf.cast(tf.expand_dims(
+            #     [begin_id] * batch_size, 1), tf.int32)
+            dec_input = tf.cast(tf.expand_dims(targ[:, 0], 1), tf.int32)
+            attention_coverage = tf.zeros([batch_size, x_seq_len],
                                           dtype=tf.float32)
             # Teacher forcing - feeding the target as the next input
-            for t in tf.range(1, targ.shape[1]):
+            for t in tf.range(1, y_seq_len):
                 # passing enc_output to the decoder
                 predictions, dec_hidden, att_weights = self.decoder(
                     dec_input, dec_hidden, enc_output)
@@ -67,7 +70,7 @@ class Seq2seq_attention():
                 # using teacher forcing
                 dec_input = tf.cast(tf.expand_dims(targ[:, t], 1), tf.int32)
                 # TODO: schduled sampling
-        batch_loss = (loss / int(targ.shape[1]))
+        batch_loss = (loss / tf.cast(y_seq_len, tf.float32))
         variables = self.encoder.trainable_variables + self.decoder.trainable_variables
         gradients = tape.gradient(loss, variables)
         self.optimizer.apply_gradients(zip(gradients, variables))
@@ -116,7 +119,8 @@ class Seq2seq_attention():
                 enc_hidden = self.encoder.initialize_hidden_state(
                     inputs=inp)
                 batch_loss = self.train_step(
-                    inp, targ, enc_hidden, begin_id, y_max_length)
+                    inp, targ, enc_hidden, begin_id, inp.shape[0],
+                    inp.shape[1], targ.shape[1])
                 total_loss += batch_loss
                 if batch % (steps_per_epoch // epoch_verbosity + 1) == 0:
                     print('Epoch {} Batch {} Loss {:.4f} Time {}'.format(
