@@ -1,14 +1,14 @@
+from .tf_eval import predict_array_input
 
 import tensorflow as tf
 # import tensorflow_addons as tfa
 import time
 import os
-import sys
+# import sys
 import logging
 import gensim
 import numpy as np
 from functools import reduce
-from tf_eval import predict_array_input
 # from data import MyCorpus
 # from utils.config import data_path
 

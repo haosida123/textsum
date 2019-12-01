@@ -4,7 +4,7 @@
 ## Implementations:
 * fasttext embedding
 * [attention coverage loss](http://www.abigailsee.com/2017/04/16/taming-rnns-for-better-summarization.html)
-* sequence-length-based loss
+* sequence-length-based loss: loss_ *= 1.0 / exp(sequence_length / 100.0)
 * beam search
 * bucket batch, longer/varing sequence: low traing performance can be solved by adding input_signature, and when max length is very long, OOM happens often, which can be solved by decreasing batch_size, but this can slow down the training speed actually. Sequence trimming cannot resolve this either for unknown reasons.
 

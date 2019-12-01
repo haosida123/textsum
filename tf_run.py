@@ -1,11 +1,13 @@
 # %%
+from tensorflow_model.tf_seq2seq_att import fasttext_embedding
+from tensorflow_model.tf_seq2seq_att import Seq2seq_attention
+from beam_search import BeamSearch
+from data import TextDataset  # , MyCorpus
+
 from argparse import ArgumentParser
 from sklearn.model_selection import train_test_split
 import tensorflow as tf
-from data import TextDataset  # , MyCorpus
 from utils.config import params
-from tf_seq2seq_att import fasttext_embedding, Seq2seq_attention
-from beam_search import BeamSearch
 # from rouge_l_tensorflow import tf_rouge_l
 
 
@@ -104,7 +106,7 @@ def train(dataset, dataval, y_max_length, steps_per_epoch, vocab, params):
     #     return sum(tf_rouge_l(preds, truth, vocab.eos))
     def callback():
         print("train set:")
-        it = iter(dataset)
+        it = iter(dataset.unbatch())
         for _ in range(3):
             inp, out = next(it)
             seq2seq.compare_input_output(
