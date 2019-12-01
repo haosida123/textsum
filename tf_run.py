@@ -214,8 +214,5 @@ if __name__ == '__main__':
 # seq2seq.teacher_forcing_test_loss(dataval, vocab.bos)
 
 # %%
-a = {1:2}
-a.update({1:3, 2:3})
-a
 
 # %%
