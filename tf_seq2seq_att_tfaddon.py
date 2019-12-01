@@ -56,11 +56,27 @@ class Seq2seq_attention():
             attention_coverage = tf.zeros([batch_size, x_seq_len],
                                           dtype=tf.float32)
             # Teacher forcing - feeding the target as the next input
-            for t in tf.range(1, y_seq_len):
+            # for t in tf.range(1, y_seq_len):
+            time = tf.constant(0, dtype=tf.int32)
+            sequence_length = tf.reduce_sum(
+                tf.cast(tf.math.logical_not(tf.math.equal(targ, 0)), tf.int32),
+                axis=1)
+            finished, dec_input = self.sampler.initialize(
+                dec_input, sequence_length=sequence_length)
+            while not finished:
                 # passing enc_output to the decoder
                 predictions, dec_hidden, att_weights = self.decoder(
                     dec_input, dec_hidden, enc_output)
-                loss += self.loss_function(targ[:, t], predictions)
+                # schduled sampling
+                sample_ids = self.sampler.sample(
+                    time=time, outputs=predictions, state=dec_hidden)
+                (finished, dec_input, dec_hidden) = self.sampler.next_inputs(
+                    time=time,
+                    outputs=predictions,
+                    state=dec_hidden,
+                    sample_ids=sample_ids)
+                # loss
+                loss += self.loss_function(targ[:, time+1], predictions)
                 # Coverage loss
                 att_weights = tf.squeeze(att_weights, axis=2)
                 attention_coverage += att_weights
@@ -110,6 +126,8 @@ class Seq2seq_attention():
                 print(e)
                 if input('continue without restoring?(y/n)').lower() != 'y':
                     return
+        self.sampler = tfa.seq2seq.ScheduledEmbeddingTrainingSampler(
+            sampling_probability, embedding_fn=self.decoder.embedding)
         print('start total {} epoch(s), {} steps per epoch, batch size {}'.format(
             epochs, steps_per_epoch, self.params["batch_size"]))
         for epoch in range(epochs):
@@ -123,8 +141,9 @@ class Seq2seq_attention():
                     inp.shape[1], targ.shape[1])
                 total_loss += batch_loss
                 if batch % (steps_per_epoch // epoch_verbosity + 1) == 0:
-                    print('Epoch {} Batch {} Loss {:.4f} Time {}'.format(
-                        epoch + 1, batch, batch_loss.numpy(), time.time() - start))
+                    print('Epoch {} Batch {}/{} Loss {:.4f} Time {}'.format(
+                        epoch + 1, batch, steps_per_epoch, batch_loss.numpy(),
+                        time.time() - start))
             # saving (checkpoint) the model every 2 epochs
             # if (epoch + 1) % 2 == 0:
             self.checkpoint.save(file_prefix=checkpoint_prefix)

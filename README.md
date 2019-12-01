@@ -6,11 +6,11 @@
 * attention coverage loss
 * beam search
 
-* bucket batch, longer/varing sequence: low traing performance solved by adding input_signature
+* bucket batch, longer/varing sequence: low traing performance can be solved by adding input_signature, and when max length is very long, OOM happens often, which can be solved by decreasing batch_size, but this can slow down the training speed actually.
 
 ## TODO:
 * scheduled sampling
-* embedding fintuning
+* embedding finetuning
 * tf-idf based / sequence length based loss
 * implementation in paddlepaddle
 * Pgen
