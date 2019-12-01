@@ -71,7 +71,7 @@ def load_test_data(params):
     print("load_test_data")
 
 
-def train(dataset, dataval, y_max_length, steps_per_epoch, vocab, epochs, restore, params):
+def train(dataset, dataval, y_max_length, steps_per_epoch, vocab, params):
     print("training")
     print(params.__dict__)
     # seq2seq = Seq2seq_attention(len(vocab), params)
@@ -102,9 +102,10 @@ def train(dataset, dataval, y_max_length, steps_per_epoch, vocab, epochs, restor
     # seq2seq.train_epoch(dataset, epochs, steps_per_epoch, vocab.bos,
     #                     restore_checkpoint=True, dataval=dataval, callback=None)
     seq2seq.train_epoch(
-        dataset, epochs, steps_per_epoch, vocab.bos,
-        restore_checkpoint=restore, dataval=dataval,
-        callback=callback)
+        dataset, params.epochs, steps_per_epoch, vocab.bos, y_max_length,
+        restore_checkpoint=params.restore, dataval=dataval,
+        epoch_verbosity=params.epoch_verbosity, callback=callback,
+        coverage_weight=params.coverage_weight)
 
 
 def check_train_results(dataval, y_max_length, steps_per_epoch, vocab, params):
@@ -135,38 +136,43 @@ def check_train_results(dataval, y_max_length, steps_per_epoch, vocab, params):
     callback()
 
 
+def arg_true_false(args, arglist):
+    for a in arglist:
+        if args.__dict__[a].lower() == 'true':
+            args.__dict__[a] = True
+        elif args.__dict__[a].lower() == 'false':
+            args.__dict__[a] = False
+        else:
+            print("argument {} = {} do not understand".format(
+                a, args.__dict__[a]))
+            raise TypeError
+
 # %%
 if __name__ == '__main__':
     parser = ArgumentParser(description='train model from data')
-    parser.add_argument("-t", "--train_epochs", type=int, default=0
+    parser.add_argument("-e", "--epochs", type=int, default=0
                         )
-    parser.add_argument("-b", "--use_bucket", default="false", type=str
+    parser.add_argument("-b", "--use_bucket", default="true", type=str
                         )
-    parser.add_argument("-r", "--restore_checkpoint", default="True", type=str
+    parser.add_argument("-r", "--restore", default="true", type=str
                         )
-    parser.add_argument("-s", "--batch_size", type=int, default=4
+    parser.add_argument("-s", "--batch_size", type=int, default=2
                         )
-    print(params.__dict__)
+    parser.add_argument("-v", "--epoch_verbosity", type=int, default=50
+                        )
     args = parser.parse_args()
-    params.batch_size = args.batch_size
-    print(args.__dict__)
-    if args.use_bucket.lower() == 'true':
+    arg_true_false(args, ["use_bucket", "restore"])
+    params.__dict__.update(args.__dict__)
+    print('\n'.join([str(kv) for kv in params.__dict__.items()]))
+    if args.use_bucket:
         dataset, dataval, y_max_length, steps_per_epoch, vocab = \
             load_data_buckets(params)
-    elif args.use_bucket.lower() == 'false':
+    else:
         dataset, dataval, y_max_length, steps_per_epoch, vocab = \
             load_data_trim(params)
-    else:
-        raise TypeError
-    if args.train_epochs > 0:
-        if args.restore_checkpoint.lower() == 'true':
-            restore = True
-        elif args.restore_checkpoint.lower() == 'false':
-            restore = False
-        else:
-            raise TypeError
+    if args.epochs > 0:
         train(dataset, dataval, y_max_length, steps_per_epoch,
-              vocab, args.train_epochs, restore, params)
+              vocab, params)
     # elif args.mode == 'test':
     #     test(args)
 
@@ -176,35 +182,40 @@ if __name__ == '__main__':
 
 
 #%%
-params.batch_size=2
-dataset, dataval, y_max_length, steps_per_epoch, vocab = \
-            load_data_trim(params)
-seq2seq = Seq2seq_attention(
-    len(vocab), params, embedding_matrix=fasttext_embedding(params, sentences=None))
-seq2seq.encoder.embedding.trainable = False
-seq2seq.decoder.embedding.trainable = False
-seq2seq.decoder.fc1.trainable = False
-it = iter(dataval)
-inp, out = next(it)
-beam_search = BeamSearch(seq2seq, 9, vocab.bos,
-                            vocab.eos, y_max_length)
-# seq2seq.compare_input_output(inp, vocab, y_max_length, out, beam_search)
-seq2seq.summary()
+# params.batch_size=2
+# dataset, dataval, y_max_length, steps_per_epoch, vocab = \
+#             load_data_trim(params)
+# seq2seq = Seq2seq_attention(
+#     len(vocab), params, embedding_matrix=fasttext_embedding(params, sentences=None))
+# seq2seq.encoder.embedding.trainable = False
+# seq2seq.decoder.embedding.trainable = False
+# seq2seq.decoder.fc1.trainable = False
+# it = iter(dataval)
+# inp, out = next(it)
+# beam_search = BeamSearch(seq2seq, 9, vocab.bos,
+#                             vocab.eos, y_max_length)
+# # seq2seq.compare_input_output(inp, vocab, y_max_length, out, beam_search)
+# seq2seq.summary()
 
-def callback():
-    for _ in range(10):
-        inp, out = next(it)
-        seq2seq.compare_input_output(
-            inp, vocab, y_max_length, out, beam_search)
+# def callback():
+#     for _ in range(10):
+#         inp, out = next(it)
+#         seq2seq.compare_input_output(
+#             inp, vocab, y_max_length, out, beam_search)
 
-# seq2seq.train_epoch(dataset, 5, steps_per_epoch, vocab.bos,
-#                     restore_checkpoint=True, dataval=dataval, callback=None)
-# seq2seq.train_epoch(dataset, 5, steps_per_epoch, vocab.bos,
-#                     restore_checkpoint=True, dataval=dataval, callback=callback)
-seq2seq.restore_checkpoint()
-# callback()
+# # seq2seq.train_epoch(dataset, 5, steps_per_epoch, vocab.bos,
+# #                     restore_checkpoint=True, dataval=dataval, callback=None)
+# # seq2seq.train_epoch(dataset, 5, steps_per_epoch, vocab.bos,
+# #                     restore_checkpoint=True, dataval=dataval, callback=callback)
+# seq2seq.restore_checkpoint()
+# # callback()
+
+# # %%
+# seq2seq.teacher_forcing_test_loss(dataval, vocab.bos)
 
 # %%
-seq2seq.teacher_forcing_test_loss(dataval, vocab.bos)
+a = {1:2}
+a.update({1:3, 2:3})
+a
 
 # %%
