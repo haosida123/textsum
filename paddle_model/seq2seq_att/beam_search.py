@@ -21,9 +21,8 @@ K*K results, and start over again until certain number of results are fully
 decoded.
 """
 
-import tensorflow as tf
-# from textsum.tensorflow_model.tf_rouge_l import tf_rouge_l
-# import numpy as np
+import paddle.fluid as fluid
+import numpy as np
 
 
 class Hypothesis(object):
@@ -198,4 +197,3 @@ class BeamSearch(object):
             print('\t{}'.format(
                 ''.join([vocab.to_tokens(t) for t in hyp.tokens if t not in [vocab.pad, vocab.unk]]).replace('seperator', ',')))
                 # ''.join([vocab.to_tokens(t) for t in hyp.tokens if t not in [vocab.bos, vocab.eos, vocab.pad, vocab.unk]]).replace('seperator', ',')))
-            # print('rouge_score:', tf_rouge_l(hyp.tokens, targets, vocab.eos))

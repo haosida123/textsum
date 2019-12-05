@@ -7,6 +7,6 @@ data/
 *.pyc
 *.sh
 .vscode/
-作业*
 debug.py
 params.json
+*.pdparams

@@ -1,8 +1,8 @@
 # from preprocessing import replace_sentence, tokenize_sentence
 # from utils.config import params
 # from seq2seq_att import Encoder, Decoder
-import tensorflow as tf
-# from textsum.tensorflow_model.tf_rouge_l import tf_rouge_l
+import paddle.fluid as fluid
+
 # from data import TextDataset
 
 
@@ -55,9 +55,9 @@ def predict_array_input(inputs, vocab, max_length_targ, encoder, decoder, target
         result = evaluate(
             [inputs], vocab.bos, vocab.eos, max_length_targ, encoder, decoder
         )
-        print('Non-beam-search Predicted:\n\t{}'.format(''.join([vocab.to_tokens(t) for t in result if t not in [
-            vocab.bos, vocab.eos, vocab.pad, vocab.unk]]).replace('seperator', ',')))
-        # print('rouge_score:', tf_rouge_l(result, targets, vocab.eos))
+        print('Non-beam-search Predicted:\n\t{}'.format(
+            ''.join([vocab.to_tokens(t) for t in result if t not in [vocab.pad, vocab.unk]]).replace('seperator', ',')))
+        # ''.join([vocab.to_tokens(t) for t in result if t not in [vocab.bos, vocab.eos, vocab.pad, vocab.unk]]).replace('seperator', ',')))
     else:
         print('Input:\t%s' % ''.join([vocab.to_tokens(w) for w in inputs if w not in [
               vocab.bos, vocab.eos, vocab.pad]]).replace('seperator', ','))
@@ -68,4 +68,3 @@ def predict_array_input(inputs, vocab, max_length_targ, encoder, decoder, target
         if targets is not None:
             print('Target:\t{}'.format(''.join([vocab.to_tokens(
                 t) for t in targets if t not in [vocab.bos, vocab.eos, vocab.pad]])))
-            # print('rouge_score:', tf_rouge_l(result, targets, vocab.eos))

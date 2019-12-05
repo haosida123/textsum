@@ -1,13 +1,13 @@
 # %%
-from preprocessing import fasttext_embedding
-from tensorflow_model.tf_seq2seq_att import Seq2seq_attention
-from beam_search import BeamSearch
-from load_data import TextDataset  # , MyCorpus
+from ..preprocessing import fasttext_embedding
+from .seq2seq_att import Seq2seq_attention
+from .beam_search import BeamSearch
+from ..load_data import TextDataset  # , MyCorpus
 
 from argparse import ArgumentParser
 from sklearn.model_selection import train_test_split
-import tensorflow as tf
-from utils.config import params
+import paddle.fluid as fluid
+from ..utils.config import params
 # from rouge_l_tensorflow import tf_rouge_l
 
 

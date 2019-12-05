@@ -1,14 +1,25 @@
 #%%
 import collections
-# import gensim
-import jieba
+import logging
+import sys
+try:
+    import gensim
+    import jieba
+except ImportError as e:
+    print(e)
+    if input('continue?(y/n)').lower() == 'n':
+        sys.exit(1)
 import pandas as pd
+import os
 import re
 import numpy as np
 import json
-from utils.config import train_data_path, test_data_path
-from utils.config import train_seg_path, test_seg_path
-from utils.config import user_dict, vocab_train_test_path  # , vocab_train_path
+import sys
+sys.path.append("..")
+from textsum.utils.config import train_data_path, test_data_path
+from textsum.utils.config import train_seg_path, test_seg_path
+from textsum.utils.config import user_dict, vocab_train_test_path  # , vocab_train_path
+from textsum.utils.config import params
 
 URLPATTERN = re.compile(
     "(http(s)?:\/\/.)?(www\.)?[-a-zA-Z0-9\@\:\%\_\+\~\#\=]{1,256}\.[-a-z]{1,6}[\.\\\/]{1,2}[-\w]{1,6}([-a-zA-Z0-9@:%_\+.~#?&//\=]*)")
@@ -199,6 +210,56 @@ class Vocab(object):
         return Vocab(counter, min_freq, use_special_tokens)
 
 
+class MyCorpus(object):
+    """An interator that yields sentences (lists of str)."""
+
+    def __init__(self, df=None):
+        # self.min_freq = params.vocab_min_frequency
+        if df is None:
+            dfcut, df1cut = gen_cut_csv('r')
+            df = pd.concat([dfcut, df1cut], axis=0, sort=False
+                           ).fillna('')
+            self.vocab = Vocab.from_json(
+                vocab_train_test_path, min_freq=params.vocab_min_frequency, use_special_tokens=True)
+        else:
+            self.vocab = Vocab(df, min_freq=params.vocab_min_frequency,
+                               use_special_tokens=True)
+        self.df = df
+
+    def __iter__(self):
+        vocab = self.vocab
+        for idx, row in self.df.iterrows():
+            # assume there's one document per line, tokens separated by whitespace
+            line = row['ColX'].split(' ') + row['Report'].split(' ')
+            line = [word for word in line if word]
+            yield vocab.to_tokens([vocab.bos]) + [vocab.to_tokens(vocab[word]) for word in line] + vocab.to_tokens([vocab.eos] + [vocab.pad] * 20)
+
+
+def fasttext_embedding(params, load_file=True, sentences=None):
+    """sentences: Corpus object. returns embedding matrix"""
+    file = os.path.join(params.data_path, "fasttext_embedding.npy")
+    # file = os.path.join(data_path, "modelfasttext.model")
+    if load_file:
+        try:
+            # modelfasttext = gensim.models.fasttext.FastText.load(file)
+            return np.load(file, allow_pickle=False)
+        except FileNotFoundError:
+            load_file = False
+    if not load_file:
+        if sentences is None:
+            raise RuntimeError('arg sentences should be a generator of sentences')
+        logging.basicConfig(
+            format='%(asctime)s : %(levelname)s : %(message)s', level=logging.INFO)
+        # sentences = MyCorpus()
+        modelfasttext = gensim.models.fasttext.FastText(sentences=sentences,
+                                                        size=params.embedding_dim, window=5, min_count=params.vocab_min_frequency, workers=3)
+        # modelfasttext.save(file)
+        embedding_matrix = np.array(
+            [modelfasttext.wv[token] for token in sentences.vocab.idx_to_token])
+        np.save(file, embedding_matrix, allow_pickle=False)
+    return embedding_matrix  # , sentences.vocab
+
+
 if __name__ == '__main__':
     dfcut, df1cut = gen_cut_csv('r')
     # dfcut, df1cut = gen_cut_csv('write')
@@ -214,13 +275,13 @@ if __name__ == '__main__':
     df = pd.concat([dfcut, df1cut], axis=0, sort=False
                    ).fillna('')
     vocab = Vocab(df, min_freq=0, use_special_tokens=True)
-    # vocab.to_json(vocab_train_test_path)
+    vocab.to_json(vocab_train_test_path)
     print('vocab len, vocab total:')
     total = sum([x[1] for x in vocab.token_freqs])
     print(len(vocab.token_freqs), total)
-    vocab_from_json = Vocab.from_json(vocab_train_test_path)
+    # vocab_from_json = Vocab.from_json(vocab_train_test_path)
     # print(sorted(list(vocab.token_freqs.keys())) == sorted(list(vocab_from_json.token_freqs.keys())))
-
+    fasttext_embedding(params, sentences=MyCorpus())
 #pd.set_option('display.max_rows', None, 'display.max_columns', None, 'display.max_colwidth', 500)
 
 

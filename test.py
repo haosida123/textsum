@@ -6,11 +6,7 @@
 
 
 # %%
-import time
-import sys
-for idx in range(10):
-    print("\r{0}".format(idx), end='')
-    time.sleep(0.2)
+import logging
 
 #%%
 

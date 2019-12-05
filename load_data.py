@@ -1,38 +1,16 @@
 # from preprocessing import gen_cut_csv
-from preprocessing import Vocab, gen_cut_csv, replace_sentence, tokenize_sentence
-from utils.config import vocab_train_test_path, params, data_path
+from textsum.preprocessing import Vocab, gen_cut_csv, replace_sentence, tokenize_sentence
+from textsum.utils.config import vocab_train_test_path, params, data_path
 
+# import logging
+# import gensim
 from functools import reduce
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 import json
 import os
 # import tensorflow as tf
-
-
-class MyCorpus(object):
-    """An interator that yields sentences (lists of str)."""
-
-    def __init__(self, df=None):
-        # self.min_freq = params.vocab_min_frequency
-        if df is None:
-            dfcut, df1cut = gen_cut_csv('r')
-            df = pd.concat([dfcut, df1cut], axis=0, sort=False
-                           ).fillna('')
-            self.vocab = Vocab.from_json(
-                vocab_train_test_path, min_freq=params.vocab_min_frequency, use_special_tokens=True)
-        else:
-            self.vocab = Vocab(df, min_freq=params.vocab_min_frequency,
-                               use_special_tokens=True)
-        self.df = df
-
-    def __iter__(self):
-        vocab = self.vocab
-        for idx, row in self.df.iterrows():
-            # assume there's one document per line, tokens separated by whitespace
-            line = row['ColX'].split(' ') + row['Report'].split(' ')
-            line = [word for word in line if word]
-            yield vocab.to_tokens([vocab.bos]) + [vocab.to_tokens(vocab[word]) for word in line] + vocab.to_tokens([vocab.eos] + [vocab.pad] * 20)
 
 
 class TextDataset():
@@ -239,6 +217,44 @@ class TextDataset():
         return sum(array != self.vocab.pad)
 
 
+def transformer_reader(mode='train'):
+    """mode = train/val/test"""
+    textdata = TextDataset()
+
+    def bos_eos(lines):
+        return ([[textdata.vocab.bos] + line + [textdata.vocab.eos] for
+                line in lines])
+    if mode == 'test':
+        x_max_length = TextDataset.decide_max_length(
+            sorted([len(x) for x in textdata.train_lines_x]),
+            params.bucket_length_percentile1,
+            params.bucket_length_percentile2)
+        textdata.test_lines_x =\
+            bos_eos([line[:x_max_length] for line in textdata.test_lines_x])
+        word_dict = {}
+        for i, token in enumerate(textdata.vocab.idx_to_token):
+            word_dict[i] = token
+        return lambda: iter(textdata.test_lines_x), word_dict
+    else:
+        x_max_length, y_max_length = textdata.trim_train_lines()
+        x_train, x_val, y_train, y_val = train_test_split(
+            textdata.train_lines_x, textdata.train_lines_y,
+            test_size=0.01, random_state=53)
+        if mode == 'train':
+            x, y0 = bos_eos(x_train), y_train
+        elif mode == 'val':
+            x, y0 = bos_eos(x_val), y_val
+        else:
+            raise ValueError
+        y = [[textdata.vocab.bos] + line for line in y0]
+        y_next = [line + [textdata.vocab.eos] for line in y0]
+
+        def generator():
+            for xyy in zip(x, y, y_next):
+                yield xyy
+        return generator
+
+
 def process_sentence_to_feed(sentence, vocab, max_length_inp):
     sentence = tokenize_sentence(replace_sentence(sentence))
     inputs = [vocab[w] for w in sentence]
@@ -249,9 +265,3 @@ def process_sentence_to_feed(sentence, vocab, max_length_inp):
     # result = evaluate(
     #     inputs, vocab, max_length_targ, encoder, decoder)
     return inputs
-
-# datatest = TextDataset()
-# tfdx, tfdy, lx, ly = datatest.to_tf_train_input()
-# tftest, tftestl = datatest.to_tf_test_input()
-# it = iter(tftest)
-# ' '.join(datatest.vocab.to_tokens(next(it).tolist()))

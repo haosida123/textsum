@@ -1,6 +1,6 @@
-from .tf_eval import predict_array_input
+from .eval import predict_array_input
 
-import tensorflow as tf
+import paddle.fluid as fluid
 # import tensorflow_addons as tfa
 import time
 import os
@@ -23,7 +23,7 @@ class Seq2seq_attention():
             vocab_size, params["embedding_dim"], params["enc_dec_units"], params["batch_size"], params["att_units"], attention=params["attention"], embedding_matrix=embedding_matrix, activation=params["activation"])
         self.encoder = encoder
         self.decoder = decoder
-        self.optimizer = tf.keras.optimizers.Adam()
+        self.optimizer = fluid.optimizer.AdamOptimizer(learning_rate=0.001)
         self.loss_object = tf.keras.losses.SparseCategoricalCrossentropy(
             from_logits=True, reduction='none')
 
@@ -256,25 +256,14 @@ class Encoder(tf.keras.Model):
         else:
             self.embedding = tf.keras.layers.Embedding(
                 vocab_size, embedding_dim)
-        self.lstm = tf.keras.layers.LSTM(enc_units,
-                                         return_state=True,
-                                         return_sequences=True)
+        self.lstm = lambda x: fluid.layers.dynamic_lstm(
+            x, enc_units * 4, name='encoder_lstm')
 
     def call(self, x, hidden):
         x = self.embedding(x)
-        output, state_h, state_c = self.lstm(x, initial_state=hidden)
+        output, state_h, state_c = self.lstm(x)
         state = tf.concat((state_h, state_c), axis=1)
         return output, state
-
-    def initialize_hidden_state(self, inputs=None, batch_size=None):
-        if inputs is not None:
-            _batch_size = len(inputs)
-        elif batch_size is not None:
-            _batch_size = batch_size
-        else:
-            _batch_size = self.batch_size
-        return [tf.zeros((_batch_size, self.enc_units)),
-                tf.zeros((_batch_size, self.enc_units))]
 
 
 class Decoder(tf.keras.Model):
@@ -308,9 +297,8 @@ class Decoder(tf.keras.Model):
                 vocab_size, embedding_dim)
             self.fc1 = tf.keras.layers.Dense(
                 vocab_size, use_bias=False, activation=activation)
-        self.lstm = tf.keras.layers.LSTM(self.dec_units,
-                                         return_sequences=True,
-                                         return_state=True)
+        self.lstm = lambda x: fluid.layers.dynamic_lstm(
+            x, dec_units * 4, name='decoder_lstm')
         self.fc0 = tf.keras.layers.Dense(embedding_dim)
         # used for attention
         if attention == 'BahdanauAttention':
