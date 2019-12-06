@@ -42,10 +42,9 @@ class InferTaskConfig(object):
     batch_size = 4
     # the parameters for beam search.
     beam_size = 4
-    alpha=0.6
+    alpha = 0.6
     # max decoded length, should be less than ModelHyperParams.max_length
     max_out_len = 74
-
 
 
 class ModelHyperParams(object):

@@ -70,6 +70,7 @@ class TextDataset():
                 self.train_lines_y = self._df2lines(
                     df_train.loc[:, ['Report']])
                 self.test_lines_x = self._df2lines(df_test.loc[:, ['ColX']])
+                self.delete_y_too_short_train()
                 with open(os.path.join(data_path, 'textdatasetxy.json'), 'w') as fp:
                     json.dump(
                         (self.train_lines_x, self.train_lines_y, self.test_lines_x), fp)
@@ -176,7 +177,7 @@ class TextDataset():
         steps, last_batch = divmod(
             len(lengths), batchsize)  # total # of batches
         batchsizes = [batchsize] * steps + [last_batch]
-        bounds = np.percentile(lengths, np.arange(0, 100, 100/steps)[:steps])
+        bounds = np.percentile(lengths, np.arange(0, 100, 100 / steps)[:steps])
         bounds = [int(b) for b in bounds]
         return bounds, batchsizes, steps
 
@@ -212,9 +213,20 @@ class TextDataset():
         print('selecting:', ret)
         return ret
 
-    def element_length(self, array):
-        """return length of array without padding"""
-        return sum(array != self.vocab.pad)
+    def delete_y_too_short_train(self):
+        lenx = np.array([len(line) for line in self.train_lines_x])
+        leny = np.array([len(line) for line in self.train_lines_y])
+        keep = lenx >= leny - 5
+        self.train_lines_x = np.array(self.train_lines_x)[keep]
+        self.train_lines_y = np.array(self.train_lines_y)[keep]
+        self.train_lines_y = [[t for t in line if t != self.vocab.unk]
+                              for line in self.train_lines_y]
+        count = [len([t for t in line if self.vocab.to_tokens(t) != 'seperator'])
+                 for line in self.train_lines_y]
+        keep = np.array([c >= 2 for c in count])
+        self.train_lines_x = np.array(self.train_lines_x)[keep]
+        self.train_lines_y = np.array(self.train_lines_y)[keep]
+        # remove = np.array([c < 1 for c in count])
 
 
 def transformer_reader(mode='train'):
@@ -223,7 +235,7 @@ def transformer_reader(mode='train'):
 
     def bos_eos(lines):
         return ([[textdata.vocab.bos] + line + [textdata.vocab.eos] for
-                line in lines])
+                 line in lines])
     if mode == 'test':
         x_max_length = TextDataset.decide_max_length(
             sorted([len(x) for x in textdata.train_lines_x]),
@@ -252,7 +264,7 @@ def transformer_reader(mode='train'):
         def generator():
             for xyy in zip(x, y, y_next):
                 yield xyy
-        return generator
+        return generator, len(x)
 
 
 def process_sentence_to_feed(sentence, vocab, max_length_inp):

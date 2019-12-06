@@ -418,6 +418,7 @@ class MyAttention(tf.keras.layers.Layer):
 
         return context_vector, attention_weights
 
+
 def layer_info(layer):
     name_shapes = [(v.name, v.shape, reduce(lambda x, y: x * y, v.shape))
                    for v in layer.trainable_variables]

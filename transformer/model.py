@@ -18,7 +18,7 @@ import numpy as np
 
 import paddle.fluid as fluid
 import paddle.fluid.layers as layers
-from paddle.fluid.dygraph import Embedding, LayerNorm, FC, to_variable, Layer, guard
+from paddle.fluid.dygraph import Embedding, LayerNorm, FC, to_variable, Layer
 from paddle.fluid.dygraph.learning_rate_scheduler import LearningRateDecay
 
 from config import word_emb_param_names, pos_enc_param_names
@@ -47,6 +47,7 @@ class NoamDecay(LearningRateDecay):
     """
     learning rate scheduler
     """
+
     def __init__(self,
                  d_model,
                  warmup_steps,
@@ -71,6 +72,7 @@ class PrePostProcessLayer(Layer):
     """
     PrePostProcessLayer
     """
+
     def __init__(self, name_scope, process_cmd, shape_len=None):
         super(PrePostProcessLayer, self).__init__(name_scope)
         for cmd in process_cmd:
@@ -109,6 +111,7 @@ class PositionwiseFeedForwardLayer(Layer):
     """
     PositionwiseFeedForwardLayer
     """
+
     def __init__(self, name_scope, d_inner_hid, d_hid, dropout_rate):
         super(PositionwiseFeedForwardLayer, self).__init__(name_scope)
         self._i2h = FC(name_scope=self.full_name(),
@@ -139,6 +142,7 @@ class MultiHeadAttentionLayer(Layer):
     """
     MultiHeadAttentionLayer
     """
+
     def __init__(self,
                  name_scope,
                  d_key,
@@ -249,6 +253,7 @@ class EncoderSubLayer(Layer):
     """
     EncoderSubLayer
     """
+
     def __init__(self,
                  name_scope,
                  n_head,
@@ -310,6 +315,7 @@ class EncoderLayer(Layer):
     """
     encoder
     """
+
     def __init__(self,
                  name_scope,
                  n_layer,
@@ -360,6 +366,7 @@ class PrepareEncoderDecoderLayer(Layer):
     """
     PrepareEncoderDecoderLayer
     """
+
     def __init__(self,
                  name_scope,
                  src_vocab_size,
@@ -380,7 +387,7 @@ class PrepareEncoderDecoderLayer(Layer):
                                         name=word_emb_param_name,
                                         initializer=fluid.initializer.Normal(
                                             0., src_emb_dim**-0.5)))
-
+        # TODO: optional pretrained embedding
         pos_inp = position_encoding_init(src_max_len, src_emb_dim)
         self._pos_emb = Embedding(
             name_scope=self.full_name(),
@@ -420,6 +427,7 @@ class WrapEncoderLayer(Layer):
     """
     encoderlayer
     """
+
     def __init__(self, name_cope, src_vocab_size, max_length, n_layer, n_head,
                  d_key, d_value, d_model, d_inner_hid, prepostprocess_dropout,
                  attention_dropout, relu_dropout, preprocess_cmd,
@@ -455,6 +463,7 @@ class DecoderSubLayer(Layer):
     """
     decoder
     """
+
     def __init__(self, name_scope, n_head, d_key, d_value, d_model, d_inner_hid,
                  prepostprocess_dropout, attention_dropout, relu_dropout,
                  preprocess_cmd, postprocess_cmd):
@@ -529,6 +538,7 @@ class DecoderLayer(Layer):
     """
     decoder
     """
+
     def __init__(self, name_scope, n_layer, n_head, d_key, d_value, d_model,
                  d_inner_hid, prepostprocess_dropout, attention_dropout,
                  relu_dropout, preprocess_cmd, postprocess_cmd):
@@ -580,6 +590,7 @@ class WrapDecoderLayer(Layer):
     """
     decoder
     """
+
     def __init__(self,
                  name_scope,
                  trg_vocab_size,
@@ -656,6 +667,7 @@ class TransFormer(Layer):
     """
     model
     """
+
     def __init__(self,
                  name_scope,
                  src_vocab_size,
@@ -714,7 +726,7 @@ class TransFormer(Layer):
         if self._label_smooth_eps:
             label_out = layers.label_smooth(label=layers.one_hot(
                 input=label, depth=self._trg_vocab_size),
-                                            epsilon=self._label_smooth_eps)
+                epsilon=self._label_smooth_eps)
 
         cost = layers.softmax_with_cross_entropy(
             logits=predict,
@@ -739,7 +751,7 @@ class TransFormer(Layer):
         Beam search with the alive and finished two queues, both have a beam size
         capicity separately. It includes `grow_topk` `grow_alive` `grow_finish` as
         steps. 
-        
+
         1. `grow_topk` selects the top `2*beam_size` candidates to avoid all getting
         EOS.
 
@@ -787,14 +799,14 @@ class TransFormer(Layer):
         finished_flags = layers.zeros_like(finished_scores)
 
         ### initialize inputs and states of transformer decoder ###
-        ## init inputs for decoder, shaped `[batch_size*beam_size, ...]`
+        # init inputs for decoder, shaped `[batch_size*beam_size, ...]`
         trg_word = layers.reshape(alive_seq[:, :, -1],
                                   [batch_size * beam_size, 1, 1])
         trg_pos = layers.zeros_like(trg_word)
         trg_src_attn_bias = merge_beam_dim(
             expand_to_beam_size(trg_src_attn_bias, beam_size))
         enc_output = merge_beam_dim(expand_to_beam_size(enc_output, beam_size))
-        ## init states (caches) for transformer, need to be updated according to selected beam
+        # init states (caches) for transformer, need to be updated according to selected beam
         caches = [{
             "k":
             layers.fill_constant(
@@ -837,7 +849,8 @@ class TransFormer(Layer):
                          finished_in_finished):
             max_length_penalty = np.power(((5. + max_len) / 6.), alpha)
             # The best possible score of the most likely alive sequence
-            lower_bound_alive_scores = alive_log_probs[:, 0] / max_length_penalty
+            lower_bound_alive_scores = alive_log_probs[:,
+                                                       0] / max_length_penalty
 
             # Now to compute the lowest score of a finished sequence in finished
             # If the sequence isn't finished, we multiply it's score by 0. since
@@ -888,8 +901,8 @@ class TransFormer(Layer):
                                        value=eos_id)
             topk_finished = layers.cast(layers.equal(topk_ids, eos), "float32")
 
-            #topk_seq: [batch_size, 2*beam_size, i+1]
-            #topk_log_probs, topk_scores, topk_finished: [batch_size, 2*beam_size]
+            # topk_seq: [batch_size, 2*beam_size, i+1]
+            # topk_log_probs, topk_scores, topk_finished: [batch_size, 2*beam_size]
             return topk_seq, topk_log_probs, topk_scores, topk_finished, states
 
         def grow_alive(curr_seq, curr_scores, curr_log_probs, curr_finished,
@@ -913,7 +926,7 @@ class TransFormer(Layer):
                                      dtype="int64",
                                      value=eos_id)
             ],
-                                         axis=2)
+                axis=2)
             # Set the scores of the unfinished seq in curr_seq to large negative
             # values
             curr_scores += (1. - curr_finished) * -inf

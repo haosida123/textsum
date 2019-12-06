@@ -13,7 +13,14 @@
 # limitations under the License.
 
 from __future__ import print_function
+from data_util import pad_batch_data, to_variable
+from config import TrainTaskConfig, ModelHyperParams, merge_cfg_from_list,\
+    encoder_data_input_fields, decoder_data_input_fields,\
+    label_data_input_fields
+from model import TransFormer, NoamDecay
+from textsum.load_data import transformer_reader
 import argparse
+import time
 import ast
 
 import numpy as np
@@ -22,13 +29,6 @@ import paddle.fluid as fluid
 # import paddle.dataset.wmt16 as wmt16
 import sys
 sys.path.append("..")
-from textsum.load_data import transformer_reader
-
-from model import TransFormer, NoamDecay
-from config import TrainTaskConfig, ModelHyperParams, merge_cfg_from_list,\
-    encoder_data_input_fields, decoder_data_input_fields,\
-    label_data_input_fields
-from data_util import pad_batch_data, to_variable
 
 
 def parse_args():
@@ -153,7 +153,8 @@ def train(args):
                 transformer, strategy)
 
         # define data generator for training and validation
-        train_reader = paddle.batch(transformer_reader('train'),
+        train_gen_fn, train_total = transformer_reader('train')
+        train_reader = paddle.batch(train_gen_fn,
                                     batch_size=TrainTaskConfig.batch_size)
         # wmt16.train(
         # ModelHyperParams.src_vocab_size, ModelHyperParams.trg_vocab_size),
@@ -161,13 +162,15 @@ def train(args):
         if args.use_data_parallel:
             train_reader = fluid.contrib.reader.distributed_batch_reader(
                 train_reader)
-        val_reader = paddle.batch(transformer_reader('val'),
+        val_gen_fn, val_total = transformer_reader('val')
+        val_reader = paddle.batch(val_gen_fn,
                                   batch_size=TrainTaskConfig.batch_size)
         # wmt16.test(ModelHyperParams.src_vocab_size,
         #            ModelHyperParams.trg_vocab_size),
 
         # loop for training iterations
         for i in range(TrainTaskConfig.pass_num):
+            start = time.time()
             dy_step = 0
             sum_cost = 0
             transformer.train()
@@ -190,9 +193,11 @@ def train(args):
 
                 dy_step = dy_step + 1
                 if dy_step % 10 == 0:
-                    print("pass num : {}, batch_id: {}, dy_graph avg loss: {}".
-                          format(i, dy_step,
-                                 dy_avg_cost.numpy() * trainer_count))
+                    print("\rpass: {}, batch: {}/{}, avg loss: {}, time: {}/{}".
+                          format(i, dy_step, train_total // dy_step,
+                                 dy_avg_cost.numpy() * trainer_count,
+                                 time.time() - start, (time.time() - start) /
+                                 (dy_step + 1) * train_total), end='')
 
             # switch to evaluation mode
             transformer.eval()

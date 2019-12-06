@@ -13,7 +13,8 @@ if __name__ == "__main__":
         if line.endswith('，'):
             line = line[:-1]
         newlines.append(line)
-    df = pd.DataFrame(zip(["Q{:d}".format(i+1) for i in range(len(newlines))], newlines))
+    df = pd.DataFrame(
+        zip(["Q{:d}".format(i + 1) for i in range(len(newlines))], newlines))
     df.columns = ['QID', 'Prediction']
     df = df.set_index('QID')
     print(df.head())
